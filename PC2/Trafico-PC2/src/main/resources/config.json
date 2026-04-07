@@ -1,0 +1,62 @@
+{
+  "ciudad": {
+    "filas": ["A","B","C","D","E"],
+    "columnas": [1,2,3,4,5],
+    "total_intersecciones": 25
+  },
+  "broker": {
+    "puerto_sub": 5555,
+    "puerto_pub": 5556,
+    "host_pc2": "10.43.99.26"
+  },
+  "semaforos": {
+    "duracion_normal": 15,
+    "duracion_congestion": 25,
+    "duracion_prioridad": 40
+  },
+  "servicios": {
+    "analitica": {
+      "host": "10.43.99.26",
+      "puerto_pull": 6000
+    },
+    "base_datos": {
+      "host": "10.43.101.27",
+      "puerto": 5432,
+      "nombre": "trafico_db",
+      "usuario": "postgres",
+      "password": ""
+    },
+    "monitoreo": {
+        "puerto_reqrep": 7000
+    }
+  },
+  "sensores": {
+    "camaras": [
+      {"sensor_id":"CAM-A1","interseccion":"INT-A1","intervalo_ms":5000},
+      {"sensor_id":"CAM-B3","interseccion":"INT-B3","intervalo_ms":5000},
+      {"sensor_id":"CAM-C5","interseccion":"INT-C5","intervalo_ms":5000},
+      {"sensor_id":"CAM-D2","interseccion":"INT-D2","intervalo_ms":5000},
+      {"sensor_id":"CAM-E4","interseccion":"INT-E4","intervalo_ms":5000}
+    ],
+    "espiras": [
+      {"sensor_id":"ESP-A2","interseccion":"INT-A2","intervalo_ms":30000},
+      {"sensor_id":"ESP-B4","interseccion":"INT-B4","intervalo_ms":30000},
+      {"sensor_id":"ESP-C1","interseccion":"INT-C1","intervalo_ms":30000},
+      {"sensor_id":"ESP-D3","interseccion":"INT-D3","intervalo_ms":30000},
+      {"sensor_id":"ESP-E5","interseccion":"INT-E5","intervalo_ms":30000}
+    ],
+    "gps": [
+      {"sensor_id":"GPS-A3","interseccion":"INT-A3","intervalo_ms":8000},
+      {"sensor_id":"GPS-B1","interseccion":"INT-B1","intervalo_ms":8000},
+      {"sensor_id":"GPS-C4","interseccion":"INT-C4","intervalo_ms":8000},
+      {"sensor_id":"GPS-D5","interseccion":"INT-D5","intervalo_ms":8000},
+      {"sensor_id":"GPS-E2","interseccion":"INT-E2","intervalo_ms":8000}
+    ]
+  },
+  "trafico": {
+    "velocidad_maxima_kmh": 50,
+    "umbral_congestion_cola": 10,
+    "umbral_congestion_velocidad": 15,
+    "umbral_congestion_densidad": 40
+  }
+}

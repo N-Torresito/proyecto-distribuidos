@@ -1,0 +1,227 @@
+# Diagrama de Flujo - Arquitectura Refactorizada PC2
+
+## 🔄 Flujo Completo de Procesamiento
+
+```
+═══════════════════════════════════════════════════════════════════════════════
+
+                            PC1: BROKER ZMQ
+                          ┌─────────────────┐
+                          │  Broker ZMQ     │
+                          │  PUB (5556)     │
+                          └────────┬────────┘
+                                   │
+                    ┌──────────────┼──────────────┐
+                    │              │              │
+              EVENTO_CAMARA   EVENTO_ESPIRA   EVENTO_GPS
+                    │              │              │
+═══════════════════════════════════════════════════════════════════════════════
+
+                            PC2: PROCESAMIENTO
+
+            ┌───────────────────────────────────────────────────────┐
+            │                                                       │
+            │        LANZADOR ANALITICA                            │
+            │        ════════════════════                           │
+            │                                                       │
+            │  ┌──────────────────────────────────────────────┐   │
+            │  │                                              │   │
+            │  │   ServicioAnalitica (Hilo Independiente)    │   │
+            │  │   ══════════════════════════════════════    │   │
+            │  │                                              │   │
+            │  │  1. RECIBE EVENTOS (SUB - 5556)             │   │
+            │  │     └─ Socket: tcp://broker:5556            │   │
+            │  │     └─ Tópicos:                             │   │
+            │  │        • EVENTO_LONGITUD_COLA               │   │
+            │  │        • EVENTO_CONTEO_VEHICULAR            │   │
+            │  │        • EVENTO_DENSIDAD_TRAFICO            │   │
+            │  │                                              │   │
+            │  │  2. AGRUPA EVENTOS POR INTERSECCIÓN         │   │
+            │  │     └─ INT-A1: {CAMARA, ESPIRA, GPS}        │   │
+            │  │     └─ INT-B3: {CAMARA, ESPIRA, GPS}        │   │
+            │  │     └─ INT-C5: {CAMARA, ESPIRA, GPS}        │   │
+            │  │                                              │   │
+            │  │  3. CUANDO TIENE 3 EVENTOS → PROCESA        │   │
+            │  │     ├─ Detecta congestión (ReglasCongestion) │   │
+            │  │     │   └─ cola < 10 AND vel > 15 AND den   │   │
+            │  │     │      < 40 → NORMAL (15s)              │   │
+            │  │     │   └─ cola >= 10 OR vel <= 15 OR den   │   │
+            │  │     │      >= 40 → CONGESTION (25s)         │   │
+            │  │     │   └─ Orden de monitoreo → PRIORIDAD   │   │
+            │  │     │      (40s)                            │   │
+            │  │     │                                        │   │
+            │  │     ├─ GUARDA EN POSTGRESQL                 │   │
+            │  │     │   └─ INSERT/UPDATE analisis_trafico   │   │
+            │  │     │   └─ Intersección, Estado, Timestamp  │   │
+            │  │     │   └─ Velocidad, Densidad, Cola        │   │
+            │  │     │                                        │   │
+            │  │     └─ SOLICITA CAMBIO DE SEMÁFORO (REQ)    │   │
+            │  │         └─ Socket: tcp://localhost:6001     │   │
+            │  │         └─ Envía: {interseccion, estado,    │   │
+            │  │            duracion, timestamp}             │   │
+            │  │         └─ Timeout: 5 segundos              │   │
+            │  │                                              │   │
+            │  └──────────────────────────────────────────────┘   │
+            │                                                       │
+            └───────────────────┬──────────────────────────────────┘
+                                │
+                    ┌───────────┴───────────┐
+                    │                       │
+          REQ ──────┼──────┐           INSERT
+          (6001)    │      │           ────────
+                    │      │              │
+                    ▼      ▼              ▼
+           ┌──────────────┐      ┌──────────────────┐
+           │  SEMAFORO    │      │   PostgreSQL     │
+           │  CTL         │      │   ════════════   │
+           │              │      │                  │
+           │ RECIBE REQ   │      │ TABLA:           │
+           │ (6001) ◄─────┘      │ analisis_trafico │
+           │              │      │                  │
+           │ PROCESA      │      │ • interseccion   │
+           │ SOLICITUD    │      │ • estado         │
+           │ ────────────┼──────→│ • timestamp      │
+           │              │      │ • velocidad      │
+           │ ENVÍA REP    │      │ • densidad       │
+           │ (Respuesta)  │      │ • cola           │
+           │ ──────────┐  │      │ • fecha_actual   │
+           │           │  │      │                  │
+           └─────────┬─┘  │      └──────────────────┘
+                     │    │
+                     ▼    ▼
+              ┌────────────────────────────┐
+              │   ANALITICA (REP recibe)   │
+              │   ════════════════════     │
+              │                            │
+              │ Confirma cambio            │
+              │ {"status": "OK"}           │
+              │                            │
+              └────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════════════════
+
+                            COMPONENTES PRINCIPALES
+
+    LANZADOR CONTROL SEMAFOROS          LANZADOR ANALITICA
+    ══════════════════════════          ══════════════════
+           (Proceso 2)                         (Proceso 1)
+              │                                   │
+              │                                   │
+              ▼                                   ▼
+    ┌─────────────────────┐           ┌─────────────────────┐
+    │ Servicio Control    │           │ Servicio Analítica  │
+    │ Semáforos           │           │                     │
+    │                     │           │                     │
+    │ • REP (6001)        │◄──────────│ • SUB (5556)        │
+    │ • Gestiona semáforo │  REQ/REP  │ • REQ (6001)        │
+    │   estado (V/R)      │  sincrónico│ • JDBC PostgreSQL   │
+    │ • Ejecutor          │           │ • Reglas congestión │
+    │   programado        │           │                     │
+    │                     │           │                     │
+    └─────────────────────┘           └─────────────────────┘
+
+═══════════════════════════════════════════════════════════════════════════════
+
+                           LOGS POR COMPONENTE
+
+    SERVICIO ANALITICA                  SERVICIO CONTROL SEMAFOROS
+    ══════════════════════              ════════════════════════
+    [ANALITICA] Iniciando...            [SEMAFOROCTL] Iniciando...
+    [ANALITICA] Conectado al broker     [SEMAFOROCTL] Semáforos init
+    [ANALITICA] Socket REQ conectado    [SEMAFOROCTL] Socket REP
+    [ANALITICA] INT-A1 | NORMAL | ...   [SEMAFOROCTL] INT-A1 | VERDE
+    [ANALITICA] REQ-REP OK | INT-A1     [SEMAFOROCTL] INT-A1 | ROJO
+    [ANALITICA] INSERT BD | INT-A1      (después de duración)
+
+═══════════════════════════════════════════════════════════════════════════════
+
+                        SECUENCIA TEMPORAL DE EVENTOS
+
+    Tiempo    BROKER          ANALITICA           SEMAFORO          BD
+    ────      ──────          ─────────           ────────          ──
+     0ms      │               │                   │                 │
+     5ms      ├─ Publica      │                   │                 │
+             │ EVENTO_CAMARA │                   │                 │
+     10ms     │               │                   │                 │
+     15ms     ├─ Publica      │                   │                 │
+             │ EVENTO_ESPIRA │                   │                 │
+     20ms     │               │                   │                 │
+     25ms     ├─ Publica      │                   │                 │
+             │ EVENTO_GPS    │                   │                 │
+     30ms     │               │                   │                 │
+     40ms     │               ├─ Tiene 3 eventos │                 │
+             │               ├─ Detecta estado  │                 │
+             │               ├─ Conecta a BD    │                 │
+             │               │                   │                 │
+     50ms     │               ├─────── REQ ─────→│                 │
+             │               │                   │                 │
+     55ms     │               │                 ├─ Valida         │
+             │               │                 ├─ Procesa        │
+     60ms     │               │                 ├─ Cambia a VERDE │
+             │               │                 ├─ Programa ROJO  │
+             │               │                 │                 │
+     65ms     │               │←────── REP ─────┤                 │
+             │               │                   │                 │
+     70ms     │               ├─────── INSERT ──────────────────→ │
+             │               │                   │                 │
+     75ms     │               │                   │            ✓ INSERTADO
+             │               │                   │                 │
+
+     (15s)    │               │                   ├─ Programa      │
+             │               │                   │   cambio ROJO  │
+                                                │   (en 15s)
+
+═══════════════════════════════════════════════════════════════════════════════
+
+                          ESTADOS DE SEMAFORO
+
+    Estado     Descripción              Duración    Condición
+    ──────     ──────────────────      ────────    ─────────────────
+    ROJO       Detenido                indefinido  Estado inicial
+    VERDE      Paso permitido          15/25/40s   Normal/Congestión/Prioridad
+    ROJO       Detenido de nuevo       indefinido  Después de duración
+    (ciclo se repite)
+
+═══════════════════════════════════════════════════════════════════════════════
+
+                        COMUNICACIÓN ZEROMQ DETALLADA
+
+    REQ/REP (Sincrónico con Garantía)
+    ─────────────────────────────────
+
+    Analitica (REQ)                          SemaforoCtl (REP)
+    ────────────────                         ───────────────
+    socket = REQ                             socket = REP
+    connect("tcp://localhost:6001")          bind("tcp://*:6001")
+    setReceiveTimeOut(5000)                  (bloqueante)
+           │                                    │
+           │ send(comando)                      │
+           ├───────────────────────────────────→│
+           │                                    │
+           │                             procesarComando()
+           │                                    │
+           │                  send(respuesta)   │
+           │←───────────────────────────────────┤
+           │                                    │
+    recv(respuesta)                            │
+    (máximo 5 segundos)                        │
+           │                                    │
+           ▼                                    ▼
+
+═══════════════════════════════════════════════════════════════════════════════
+
+                        TABLA POSTGRESQL ACTUALIZADA
+
+    Tabla: analisis_trafico
+    ─────────────────────────
+
+    interseccion   │ estado      │ timestamp              │ vel_prom │ densidad │ cola
+    ────────────────┼─────────────┼────────────────────────┼──────────┼──────────┼─────
+    INT-A1         │ NORMAL      │ 2026-04-06T12:15:30Z   │ 45.5     │ 35       │ 8
+    INT-B3         │ CONGESTION  │ 2026-04-06T12:15:35Z   │ 12.3     │ 52       │ 18
+    INT-C5         │ PRIORIDAD   │ 2026-04-06T12:15:40Z   │ 5.2      │ 78       │ 32
+
+    (Actualización automática cada vez que se procesa evento)
+
+═══════════════════════════════════════════════════════════════════════════════
+

@@ -1,0 +1,223 @@
+@startuml
+
+/' diagram meta data start
+config=StructureConfiguration;
+{
+  "projectClassification": {
+    "searchMode": "OpenProject", // OpenProject, AllProjects
+    "includedProjects": "",
+    "pathEndKeywords": "*.impl",
+    "isClientPath": "",
+    "isClientName": "",
+    "isTestPath": "",
+    "isTestName": "",
+    "isMappingPath": "",
+    "isMappingName": "",
+    "isDataAccessPath": "",
+    "isDataAccessName": "",
+    "isDataStructurePath": "",
+    "isDataStructureName": "",
+    "isInterfaceStructuresPath": "",
+    "isInterfaceStructuresName": "",
+    "isEntryPointPath": "",
+    "isEntryPointName": "",
+    "treatFinalFieldsAsMandatory": false
+  },
+  "graphRestriction": {
+    "classPackageExcludeFilter": "",
+    "classPackageIncludeFilter": "",
+    "classNameExcludeFilter": "",
+    "classNameIncludeFilter": "",
+    "methodNameExcludeFilter": "",
+    "methodNameIncludeFilter": "",
+    "removeByInheritance": "", // inheritance/annotation based filtering is done in a second step
+    "removeByAnnotation": "",
+    "removeByClassPackage": "", // cleanup the graph after inheritance/annotation based filtering is done
+    "removeByClassName": "",
+    "cutMappings": false,
+    "cutEnum": true,
+    "cutTests": true,
+    "cutClient": true,
+    "cutDataAccess": false,
+    "cutInterfaceStructures": false,
+    "cutDataStructures": false,
+    "cutGetterAndSetter": true,
+    "cutConstructors": true
+  },
+  "graphTraversal": {
+    "forwardDepth": 3,
+    "backwardDepth": 3,
+    "classPackageExcludeFilter": "",
+    "classPackageIncludeFilter": "",
+    "classNameExcludeFilter": "",
+    "classNameIncludeFilter": "",
+    "methodNameExcludeFilter": "",
+    "methodNameIncludeFilter": "",
+    "hideMappings": false,
+    "hideDataStructures": false,
+    "hidePrivateMethods": true,
+    "hideInterfaceCalls": true, // indirection: implementation -> interface (is hidden) -> implementation
+    "onlyShowApplicationEntryPoints": false, // root node is included
+    "useMethodCallsForStructureDiagram": "ForwardOnly" // ForwardOnly, BothDirections, No
+  },
+  "details": {
+    "aggregation": "GroupByClass", // ByClass, GroupByClass, None
+    "showClassGenericTypes": true,
+    "showMethods": true,
+    "showMethodParameterNames": true,
+    "showMethodParameterTypes": true,
+    "showMethodReturnType": true,
+    "showPackageLevels": 2,
+    "showDetailedClassStructure": true
+  },
+  "rootClass": "com.trafico.servicios.ServicioMonitoreo",
+  "extensionCallbackMethod": "" // qualified.class.name#methodName - signature: public static String method(String)
+}
+diagram meta data end '/
+
+
+
+digraph g {
+    rankdir="TB"
+    splines=polyline
+    
+
+'nodes 
+subgraph cluster_1067307886 { 
+   	label=trafico
+	labeljust=l
+	fillcolor="#ececec"
+	style=filled
+   
+   subgraph cluster_1084783617 { 
+   	label=servicios
+	labeljust=l
+	fillcolor="#d8d8d8"
+	style=filled
+   
+   ControladorConsultas1925030100[
+	label=<<TABLE BORDER="1" CELLBORDER="0" CELLPADDING="4" CELLSPACING="0">
+<TR><TD ALIGN="LEFT" >(C)ControladorConsultas</TD></TR>
+<HR/>
+<TR><TD ALIGN="LEFT" >-   config: ConfiguracionSistema [0..1]</TD></TR>
+<TR><TD ALIGN="LEFT" >-   contadorComandos: AtomicLong [0..1]</TD></TR>
+<TR><TD ALIGN="LEFT" >-   gestorBD: GestorBaseDatosConsultas [0..1]</TD></TR>
+<TR><TD ALIGN="LEFT" >-   zContext: ZContext [0..1]</TD></TR>
+<HR/>
+<TR><TD ALIGN="LEFT" >+ cerrar()</TD></TR>
+<TR><TD ALIGN="LEFT" >- enviarComandoPrioridad(comandoId: String, intersecciones: List&lt;String&gt;, tipoEvento: String, duracion: int, razon: String)</TD></TR>
+<TR><TD ALIGN="LEFT" >- esValidoTipoEvento(tipo: String): boolean</TD></TR>
+<TR><TD ALIGN="LEFT" >- generarAlertas(estadoPorCategoria: Map&lt;String, Integer&gt;, densidadPromedio: double, velocidadPromedio: double): List&lt;Map&lt;String, Object&gt;&gt;</TD></TR>
+<TR><TD ALIGN="LEFT" >- generarErrorResponse(codigo: int, error: String, mensaje: String): String</TD></TR>
+<TR><TD ALIGN="LEFT" >- generarExitoResponse(codigo: int, datos: Map&lt;String, Object&gt;, mensaje: String): String</TD></TR>
+<TR><TD ALIGN="LEFT" >- generarTimestampFormato(): String</TD></TR>
+<TR><TD ALIGN="LEFT" >- obtenerTimestampISO(): String</TD></TR>
+<TR><TD ALIGN="LEFT" >- procesarEnviarPrioridad(solicitud: Map&lt;String, Object&gt;): String</TD></TR>
+<TR><TD ALIGN="LEFT" >- procesarEstadoActual(solicitud: Map&lt;String, Object&gt;): String</TD></TR>
+<TR><TD ALIGN="LEFT" >- procesarEstadoGlobal(): String</TD></TR>
+<TR><TD ALIGN="LEFT" >- procesarGenerarReporte(solicitud: Map&lt;String, Object&gt;): String</TD></TR>
+<TR><TD ALIGN="LEFT" >- procesarHistorialRango(solicitud: Map&lt;String, Object&gt;): String</TD></TR>
+<TR><TD ALIGN="LEFT" >+ procesarSolicitud(solicitudJson: String): String</TD></TR>
+<TR><TD ALIGN="LEFT" >- validarFechas(inicio: LocalDateTime, fin: LocalDateTime): boolean</TD></TR>
+<TR><TD ALIGN="LEFT" >- validarInterseccion(interseccion: String): boolean</TD></TR>
+</TABLE>>
+	style=filled
+	margin=0
+	shape=plaintext
+	fillcolor="#FFFFFF"
+];
+
+ServicioMonitoreo1925030100[
+	label=<<TABLE BORDER="1" CELLBORDER="0" CELLPADDING="4" CELLSPACING="0">
+<TR><TD ALIGN="LEFT" >(C)ServicioMonitoreo</TD></TR>
+<HR/>
+<TR><TD ALIGN="LEFT" >-   activo: boolean [1]</TD></TR>
+<TR><TD ALIGN="LEFT" >-   config: ConfiguracionSistema [0..1]</TD></TR>
+<TR><TD ALIGN="LEFT" >-   controlador: ControladorConsultas [0..1]</TD></TR>
+<TR><TD ALIGN="LEFT" >-   socket: Socket [0..1]</TD></TR>
+<TR><TD ALIGN="LEFT" >-   zContext: ZContext [0..1]</TD></TR>
+<HR/>
+<TR><TD ALIGN="LEFT" >+ detener()</TD></TR>
+<TR><TD ALIGN="LEFT" >+ estaActivo(): boolean</TD></TR>
+<TR><TD ALIGN="LEFT" >- extraerTipoSolicitud(json: String): String</TD></TR>
+<TR><TD ALIGN="LEFT" >- iniciarServicio()</TD></TR>
+<TR><TD ALIGN="LEFT" >- loopAceptacion()</TD></TR>
+<TR><TD ALIGN="LEFT" >+ run()</TD></TR>
+</TABLE>>
+	style=filled
+	margin=0
+	shape=plaintext
+	fillcolor="#FFFFFF"
+];
+} 
+
+subgraph cluster_1877076962 { 
+   	label=config
+	labeljust=l
+	fillcolor="#d8d8d8"
+	style=filled
+   
+   ConfiguracionSistema1095215061[
+	label=<<TABLE BORDER="1" CELLBORDER="0" CELLPADDING="4" CELLSPACING="0">
+<TR><TD ALIGN="LEFT" >(C)ConfiguracionSistema</TD></TR>
+<HR/>
+<TR><TD ALIGN="LEFT" >-   broker: Broker [0..1]</TD></TR>
+<TR><TD ALIGN="LEFT" >-   ciudad: Ciudad [0..1]</TD></TR>
+<TR><TD ALIGN="LEFT" >-   semaforos: Semaforos [0..1]</TD></TR>
+<TR><TD ALIGN="LEFT" >-   sensores: Sensores [0..1]</TD></TR>
+<TR><TD ALIGN="LEFT" >-   servicios: Servicios [0..1]</TD></TR>
+<TR><TD ALIGN="LEFT" >-   trafico: Trafico [0..1]</TD></TR>
+<HR/>
+<TR><TD ALIGN="LEFT" >+ cargar(rutaArchivo: String): ConfiguracionSistema</TD></TR>
+<TR><TD ALIGN="LEFT" >+ cargarDesdeRecursos(): ConfiguracionSistema</TD></TR>
+</TABLE>>
+	style=filled
+	margin=0
+	shape=plaintext
+	fillcolor="#FFFFFF"
+];
+} 
+
+subgraph cluster_526292194 { 
+   	label=bd
+	labeljust=l
+	fillcolor="#d8d8d8"
+	style=filled
+   
+   GestorBaseDatosConsultas1410220629[
+	label=<<TABLE BORDER="1" CELLBORDER="0" CELLPADDING="4" CELLSPACING="0">
+<TR><TD ALIGN="LEFT" >(C)GestorBaseDatosConsultas</TD></TR>
+<HR/>
+<TR><TD ALIGN="LEFT" >-   config: ConfiguracionSistema [0..1]</TD></TR>
+<HR/>
+<TR><TD ALIGN="LEFT" >+ calcularEstadisticas(registros: List&lt;Map&lt;String, Object&gt;&gt;): Map&lt;String, Object&gt;</TD></TR>
+<TR><TD ALIGN="LEFT" >- encontrarPicoCongestion(registros: List&lt;Map&lt;String, Object&gt;&gt;): String</TD></TR>
+<TR><TD ALIGN="LEFT" >- mapearRegistro(rs: ResultSet): Map&lt;String, Object&gt;</TD></TR>
+<TR><TD ALIGN="LEFT" >- obtenerConexion(): Connection</TD></TR>
+<TR><TD ALIGN="LEFT" >+ obtenerEstadoActual(interseccion: String): Map&lt;String, Object&gt;</TD></TR>
+<TR><TD ALIGN="LEFT" >+ obtenerHistorial(interseccion: String, inicio: LocalDateTime, fin: LocalDateTime): List&lt;Map&lt;String, Object&gt;&gt;</TD></TR>
+<TR><TD ALIGN="LEFT" >+ obtenerHorasPico(inicio: LocalDateTime, fin: LocalDateTime): List&lt;Map&lt;String, Object&gt;&gt;</TD></TR>
+<TR><TD ALIGN="LEFT" >+ obtenerInterseccionesCriticas(): List&lt;Map&lt;String, Object&gt;&gt;</TD></TR>
+<TR><TD ALIGN="LEFT" >+ obtenerTodasLasIntersecciones(): List&lt;Map&lt;String, Object&gt;&gt;</TD></TR>
+<TR><TD ALIGN="LEFT" >+ registrarComandoPrioridad(comandoId: String, intersecciones: List&lt;String&gt;, tipoEvento: String, duracion: int, razon: String)</TD></TR>
+</TABLE>>
+	style=filled
+	margin=0
+	shape=plaintext
+	fillcolor="#FFFFFF"
+];
+} 
+} 
+
+'edges    
+ControladorConsultas1925030100 -> ConfiguracionSistema1095215061[label="config
+[0..1]"];
+ControladorConsultas1925030100 -> GestorBaseDatosConsultas1410220629[label="gestorBD
+[0..1]"];
+ServicioMonitoreo1925030100 -> ConfiguracionSistema1095215061[label="config
+[0..1]"];
+ServicioMonitoreo1925030100 -> ControladorConsultas1925030100[label="controlador
+[0..1]"];
+    
+}
+@enduml
