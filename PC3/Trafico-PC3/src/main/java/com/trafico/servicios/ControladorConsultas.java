@@ -431,7 +431,8 @@ public class ControladorConsultas {
     private void enviarComandoPrioridad(String comandoId, List<String> intersecciones,
                                        String tipoEvento, int duracion, String razon) throws Exception {
         ConfiguracionSistema.ServicioAnalitica analitricaConfig = config.getServicios().getAnalitica();
-        String endpoint = "tcp://" + analitricaConfig.getHost() + ":" + analitricaConfig.getPuerto_push_semaforoctl();
+        // Conectar al puerto PULL dedicado de analítica (no al puerto de control de semáforos)
+        String endpoint = "tcp://" + analitricaConfig.getHost() + ":" + analitricaConfig.getPuerto_pull_monitoreo();
 
         ZMQ.Socket socket = zContext.createSocket(ZMQ.PUSH);
         socket.connect(endpoint);

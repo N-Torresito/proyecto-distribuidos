@@ -17,7 +17,8 @@
   "servicios": {
     "analitica": {
       "host": "10.43.99.26",
-      "puerto_pull": 6000
+      "puerto_pull": 6000,
+      "puerto_pull_monitoreo": 6002
     },
     "base_datos": {
       "host": "10.43.101.27",
@@ -27,7 +28,10 @@
       "password": ""
     },
     "monitoreo": {
-        "puerto_reqrep": 7000
+        "host": "10.43.101.27",
+        "host_replica": "10.43.99.26",
+        "puerto_reqrep": 7000,
+        "puerto_replica": 7001
     }
   },
   "sensores": {

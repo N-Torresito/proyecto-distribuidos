@@ -182,6 +182,7 @@ public class ConfiguracionSistema {
         private String host;
         private int puerto_pull;
         private int puerto_push_semaforoctl;
+        private int puerto_pull_monitoreo;
 
         public String getHost() { return host; }
         public void setHost(String v) { this.host = v; }
@@ -189,6 +190,8 @@ public class ConfiguracionSistema {
         public void setPuerto_pull(int v){ this.puerto_pull = v; }
         public int getPuerto_push_semaforoctl() { return puerto_push_semaforoctl; }
         public void setPuerto_push_semaforoctl(int v) { this.puerto_push_semaforoctl = v; }
+        public int getPuerto_pull_monitoreo() { return puerto_pull_monitoreo; }
+        public void setPuerto_pull_monitoreo(int v) { this.puerto_pull_monitoreo = v; }
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
@@ -213,10 +216,19 @@ public class ConfiguracionSistema {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class ServicioMonitoreo {
+        private String host;
+        private String host_replica;
         private int puerto_reqrep;
+        private int puerto_replica;
 
+        public String getHost() { return host; }
+        public void setHost(String v) { this.host = v; }
+        public String getHost_replica() { return host_replica; }
+        public void setHost_replica(String v) { this.host_replica = v; }
         public int getPuerto_reqrep() { return puerto_reqrep; }
         public void setPuerto_reqrep(int v) { this.puerto_reqrep = v; }
+        public int getPuerto_replica() { return puerto_replica; }
+        public void setPuerto_replica(int v) { this.puerto_replica = v; }
     }
 }
 
