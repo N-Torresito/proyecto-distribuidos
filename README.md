@@ -1,24 +1,86 @@
 # Gestión Inteligente de Tráfico Urbano
 
-Sistema distribuido en 3 máquinas para monitoreo y control de tráfico en una cuadrícula 5×5 (25 intersecciones, INT-A1 a INT-E5).
+Sistema distribuido en 3 máquinas para monitoreo y control de tráfico en tiempo real. Cuadrícula 5×5 (25 intersecciones, INT-A1 a INT-E5). Comunicación exclusivamente mediante ZeroMQ (JeroMQ).
 
-## Arquitectura
+---
+
+## Cómo funciona el sistema
+
+### Arquitectura general
+
+El sistema combina dos estilos arquitectónicos:
+
+**Cliente/Servidor (REQ/REP)**
+- El *Consultor de Usuario* (cliente REQ) envía consultas al *Servicio de Monitoreo* en PC3 (servidor REP, puerto 7000).
+- Si PC3 no responde en 4 segundos, el cliente hace **failover automático** al *ServicioMonitoreoRéplica* en PC2 (puerto 7001) sin intervención del usuario.
+- El *Servicio de Analítica* (cliente REQ) envía comandos de cambio de semáforo al *Servicio de Control de Semáforos* (servidor REP, puerto 6001) y espera ACK antes de continuar.
+
+**Orientada a Eventos (PUB/SUB y PUSH/PULL)**
+- 15 sensores publican eventos continuamente al broker ZMQ en PC1.
+- El broker enruta los eventos por tópico (CAMARA, ESPIRA, GPS) a todos los suscriptores.
+- La analítica en PC2 reacciona a cada evento de forma asíncrona: detecta el estado de tráfico y escribe en la BD sin bloquear la recepción de nuevos eventos.
+
+### Flujo de datos completo
 
 ```
-PC1 (10.43.xxx.xxx) — Sensores + Broker ZMQ
-  Sensores → PUSH → Broker (SUB/PUB bridge, :5555/:5556)
+Sensores (PC1)
+  │  PUB → tópico CAMARA/ESPIRA/GPS
+  ▼
+Broker ZMQ (PC1, :5555/:5556)
+  │  PUB → todos los suscriptores
+  ▼
+ServicioAnalitica (PC2)
+  │  Detecta NORMAL / CONGESTION / PRIORIDAD
+  ├─ REQ → ServicioControlSemaforos (PC2, :6001)   ← ACK
+  └─ PUSH → GestorBaseDatosReplica (PC2, :6000)
+               │  Guarda en BD réplica local (PostgreSQL)
+               └─ PUSH → GestorBaseDatos (PC3, :5557)   ← guarda en BD principal
 
-PC2 (10.43.99.26) — Analítica + Control Semáforos + BD Réplica + MonitoreoRéplica
-  Broker PUB → SUB ServicioAnalitica → REQ ServicioControlSemaforos (:6001)
-                                     → PUSH GestorBDReplica (:6000)
-  PC3 PUSH → PULL ServicioAnalitica (:6002)   [comandos de prioridad]
-  Clientes REQ → REP ServicioMonitoreoReplica (:7001)  [failover de PC3]
-
-PC3 (10.43.101.27) — Monitoreo Principal + BD Principal
-  Clientes REQ → REP ServicioMonitoreo (:7000)
-  ServicioMonitoreo PUSH → PC2:6002  [comandos de prioridad a analítica]
-  GestorBDReplica PUSH → GestorBD PC3 (:5557)  [sincronización BD]
+ConsultorUsuario (cualquier PC)
+  │  REQ → ServicioMonitoreo (PC3, :7000)
+  │        │  Lee BD principal PostgreSQL
+  │        └─ PUSH → ServicioAnalitica (PC2, :6002)  [solo para ENVIAR_PRIORIDAD]
+  │
+  └─ [si timeout 4s] REQ → ServicioMonitoreoReplica (PC2, :7001)
+                           │  Lee BD réplica local
+                           └─ PUSH → ServicioAnalitica (PC2, :6002)
 ```
+
+### Detección de estado de tráfico
+
+Cada intersección tiene exactamente **un tipo de sensor**. La analítica procesa el evento en cuanto llega (sin esperar otros sensores). Si hay múltiples sensores para una misma intersección, usa un buffer con timeout de 5 s para agruparlos.
+
+| Condición detectada | Estado | Duración fase verde |
+|---------------------|--------|---------------------|
+| Cola < 10 AND velocidad > 15 km/h AND densidad < 40% | NORMAL | 15 s |
+| Cola ≥ 10 OR velocidad ≤ 15 km/h OR densidad ≥ 40% | CONGESTION | 25 s |
+| Comando manual del operador | PRIORIDAD | 40 s |
+
+### Tolerancia a fallos
+
+Cuando PC3 cae:
+1. El cliente detecta timeout en ≤ 4 s en el socket REQ.
+2. Cierra el socket y abre uno nuevo conectado a PC2:7001.
+3. Imprime `[FAILOVER]` en pantalla y `[MODO REPLICA]` en el menú.
+4. Todas las consultas siguientes van a PC2 hasta que se reinicie la sesión.
+
+`GestorBaseDatosReplica` en PC2 siempre guarda localmente. Si la conexión a PC3 falla, sigue guardando en local sin interrupciones.
+
+---
+
+## Estructura del proyecto
+
+```
+proyecto-distribuidos/
+├── PC1/Trafico-PC1/          ← Broker ZMQ + 15 sensores
+├── PC2/Trafico-PC2/          ← Analítica + Semáforos + BD Réplica + Monitoreo Réplica
+├── PC3/Trafico-PC3/          ← Monitoreo Principal + BD Principal
+└── README.md
+```
+
+Cada módulo es un proyecto Maven independiente con su propio `pom.xml`.
+
+---
 
 ## Prerequisitos
 
@@ -27,148 +89,162 @@ PC3 (10.43.101.27) — Monitoreo Principal + BD Principal
 - PostgreSQL 14+ (en PC2 y PC3)
 - Acceso de red entre las 3 máquinas
 
+---
+
 ## Base de Datos PostgreSQL
 
-Ejecutar en **PC2** (localhost) y **PC3** (localhost):
+Ejecutar en **PC2** y en **PC3** (cada una en su propio PostgreSQL local):
 
 ```sql
 CREATE DATABASE trafico_db;
 \c trafico_db
 
 CREATE TABLE analisis_trafico (
-    interseccion  VARCHAR(20) PRIMARY KEY,
-    estado        VARCHAR(20) NOT NULL,
-    timestamp     VARCHAR(30) NOT NULL,
+    interseccion       VARCHAR(20) PRIMARY KEY,
+    estado             VARCHAR(20) NOT NULL,
+    timestamp          VARCHAR(30) NOT NULL,
     velocidad_promedio DOUBLE PRECISION,
-    densidad      DOUBLE PRECISION,
-    cola          INTEGER
+    densidad           DOUBLE PRECISION,
+    cola               INTEGER
 );
 ```
 
-Usuario por defecto: `postgres`, contraseña: vacía (ajustar en `config.json` → `servicios.base_datos.password`).
+Usuario: `postgres`. Contraseña: vacía por defecto (ajustar en `config.json` → `servicios.base_datos.password`).
+
+---
 
 ## Compilación
 
-Cada módulo se compila independientemente desde su carpeta:
-
 ```bash
 # PC1
-cd PC1/Trafico-PC1
-mvn clean package -q
+cd PC1/Trafico-PC1 && mvn clean package -q
 
 # PC2
-cd PC2/Trafico-PC2
-mvn clean package -q
+cd PC2/Trafico-PC2 && mvn clean package -q
 
 # PC3
-cd PC3/Trafico-PC3
-mvn clean package -q
+cd PC3/Trafico-PC3 && mvn clean package -q
 ```
 
-## Orden de Arranque
+---
 
-**Importante:** respetar este orden para que los sockets encuentren sus pares.
+## Orden de arranque
 
-### 1. PC3 — Servicio de Monitoreo + BD Principal
+**Respetar este orden** — los sockets que hacen `connect()` necesitan que el lado `bind()` ya esté activo.
 
+### 1. PC3 — Monitoreo Principal + BD Principal
 ```bash
 cd PC3/Trafico-PC3
 mvn exec:java
 ```
-
 Inicia:
-- `ServicioMonitoreo` — REP en `:7000`, responde consultas de clientes
-- `GestorBaseDatos` — PULL en `:5557`, persiste datos en PostgreSQL local
+- `ServicioMonitoreo` — REP en `:7000`
+- `GestorBaseDatos` — PULL en `:5557`
 
-### 2. PC2 — Analítica + Control + BD Réplica + Monitoreo Réplica
-
+### 2. PC2 — Analítica + Semáforos + BD Réplica + Monitoreo Réplica
 ```bash
 cd PC2/Trafico-PC2
 mvn exec:java
 ```
-
-Inicia 4 hilos:
-- `ServicioAnalitica` — SUB al broker, procesa eventos, REQ a control de semáforos
-- `ServicioControlSemaforos` — REP en `:6001`, ejecuta cambios de fase
-- `GestorBaseDatosReplica` — PULL en `:6000`, persiste en PostgreSQL local + PUSH a PC3:5557
-- `ServicioMonitoreoReplica` — REP en `:7001`, failover cuando PC3 no responde
+Inicia 4 hilos en paralelo:
+- `ServicioAnalitica` — SUB al broker, REQ a semáforos, PUSH a BD
+- `ServicioControlSemaforos` — REP en `:6001`
+- `GestorBaseDatosReplica` — PULL en `:6000`, PUSH a PC3:5557
+- `ServicioMonitoreoReplica` — REP en `:7001` (siempre activo, failover de PC3)
 
 ### 3. PC1 — Broker + Sensores
-
 ```bash
 cd PC1/Trafico-PC1
 mvn exec:java
 ```
-
 Inicia:
-- `Broker` — bridge SUB:5555 → PUB:5556
-- `LanzadorSensores` — 15 sensores (5 cámaras, 5 espiras, 5 GPS) publicando al broker
+- `BrokerZMQ` — SUB:5555 → PUB:5556
+- 15 sensores (5 cámaras cada 5s, 5 GPS cada 8s, 5 espiras cada 30s)
 
-### 4. Cliente CLI — Desde cualquier máquina
-
+### 4. Cliente — Desde cualquier máquina
 ```bash
 cd PC3/Trafico-PC3
 mvn exec:java -Dexec.mainClass=com.trafico.clientes.ConsultorServicioMonitoreo
 ```
+- Conecta a PC3:7000 (primario)
+- Failover automático a PC2:7001 si PC3 no responde en 4 s
 
-El cliente se conecta primero a PC3:7000. Si hay timeout (4s), hace **failover automático** a PC2:7001.
+---
 
-## Puertos
+## Puertos ZMQ
 
-| Puerto | Protocolo | Servicio         | Máquina |
-|--------|-----------|------------------|---------|
-| 5555   | SUB       | Broker entrada   | PC1     |
-| 5556   | PUB       | Broker salida    | PC1     |
-| 5557   | PULL      | GestorBD         | PC3     |
-| 6000   | PULL      | GestorBDRéplica  | PC2     |
-| 6001   | REP       | ControlSemáforos | PC2     |
-| 6002   | PULL      | Analítica (prioridades) | PC2 |
-| 7000   | REP       | ServicioMonitoreo | PC3    |
-| 7001   | REP       | MonitoreoRéplica | PC2     |
+| Puerto | Patrón | Dirección | Servicio |
+|--------|--------|-----------|----------|
+| 5555 | SUB/PUB | PC1 BIND | Broker — entrada sensores |
+| 5556 | PUB | PC1 BIND | Broker — salida hacia analítica |
+| 5557 | PULL | PC3 BIND | GestorBaseDatos principal |
+| 6000 | PULL | PC2 BIND | GestorBaseDatosReplica |
+| 6001 | REP | PC2 BIND | ServicioControlSemaforos |
+| 6002 | PULL | PC2 BIND | ServicioAnalitica — comandos de prioridad desde monitoreo |
+| 7000 | REP | PC3 BIND | ServicioMonitoreo principal |
+| 7001 | REP | PC2 BIND | ServicioMonitoreoReplica (failover) |
 
-## Sensores por Intersección
+---
+
+## Sensores por intersección
 
 Cada intersección tiene exactamente un tipo de sensor:
 
-| Sensor | Intersecciones |
-|--------|---------------|
-| Cámara (EVENTO_LONGITUD_COLA) | INT-A1, INT-B3, INT-C5, INT-D2, INT-E4 |
-| Espira (EVENTO_CONTEO_VEHICULAR) | INT-A2, INT-B4, INT-C1, INT-D3, INT-E5 |
-| GPS (EVENTO_DENSIDAD_TRAFICO) | INT-A3, INT-B1, INT-C4, INT-D5, INT-E2 |
+| Tipo de sensor | Intersecciones | Intervalo |
+|----------------|---------------|-----------|
+| Cámara (`CAMARA`) — longitud de cola y velocidad | INT-A1, INT-B3, INT-C5, INT-D2, INT-E4 | 5 s |
+| GPS (`GPS`) — velocidad promedio | INT-A3, INT-B1, INT-C4, INT-D5, INT-E2 | 8 s |
+| Espira inductiva (`ESPIRA`) — conteo vehicular | INT-A2, INT-B4, INT-C1, INT-D3, INT-E5 | 30 s |
 
-## Estados de Tráfico
+---
 
-| Estado    | Condición                          | Duración fase verde |
-|-----------|-----------------------------------|---------------------|
-| NORMAL    | Sin congestión detectada           | 15 s                |
-| CONGESTION| Umbral superado (cola≥10, vel≤15km/h, densidad≥40%) | 25 s |
-| PRIORIDAD | Comando manual (ambulancia, etc.)  | 40 s                |
+## Operaciones del cliente CLI
 
-## Tolerancia a Fallos
+| Opción | Nombre | Parámetros |
+|--------|--------|-----------|
+| 1 | Consultar estado actual | Intersección (ej: `INT-A1`) |
+| 2 | Ver histórico de período | Intersección + fechas ISO-8601 (ej: `2026-05-22T08:00:00Z`) |
+| 3 | Enviar indicación de prioridad | Intersecciones, tipo (AMBULANCIA/BOMBEROS/POLICIA/EVENTO_ESPECIAL), duración 10–60 s |
+| 4 | Ver estado global del sistema | — |
+| 5 | Generar reporte | Tipo (DIARIO/SEMANAL) + fecha YYYY-MM-DD |
+| 6 | Ver historial de consultas | — |
+| 7 | Salir | — |
 
-- **PC3 cae**: `GestorBDRéplica` en PC2 deja de sincronizar pero sigue persistiendo localmente. `ServicioMonitoreoReplica` en PC2 atiende nuevas consultas desde `:7001`. El cliente detecta timeout en 4s y hace failover automático.
-- **PC2 cae**: PC3 sigue recibiendo consultas. Los sensores en PC1 siguen publicando (el broker sigue activo si PC1 está en pie). Sin analítica, los semáforos no reciben nuevos comandos.
-
-## Operaciones del Cliente CLI
-
-| Opción | Solicitud             | Descripción |
-|--------|-----------------------|-------------|
-| 1      | ESTADO_ACTUAL         | Estado semáforo + métricas de una intersección |
-| 2      | HISTORIAL_RANGO       | Registros en rango de fechas (ISO-8601) |
-| 3      | ENVIAR_PRIORIDAD      | Activar modo emergencia (AMBULANCIA/BOMBEROS/POLICIA/EVENTO_ESPECIAL) |
-| 4      | ESTADO_GLOBAL         | Resumen de todas las intersecciones |
-| 5      | GENERAR_REPORTE       | Reporte DIARIO o SEMANAL |
-| 6      | —                     | Ver historial local de consultas |
-
-Ejemplo de intersección: `INT-A1`, `INT-C3`.  
-Ejemplo de fechas: `2026-05-22T08:00:00Z` / `2026-05-22T10:00:00Z`.
+---
 
 ## Ajuste de IPs
 
-Si las IPs cambian, editar `config.json` en cada módulo:
+Si las IPs de red cambian, editar `src/main/resources/config.json` en cada módulo:
 
-- `broker.host_pc2` → IP de PC2
-- `servicios.analitica.host` → IP de PC2
-- `servicios.base_datos.host` → IP de PC3
-- `servicios.monitoreo.host` → IP de PC3
-- `servicios.monitoreo.host_replica` → IP de PC2
+| Campo | Valor actual | Descripción |
+|-------|-------------|-------------|
+| `broker.host_pc2` | `10.43.99.26` | IP de PC2 |
+| `servicios.analitica.host` | `10.43.99.26` | IP de PC2 |
+| `servicios.base_datos.host` | `10.43.101.27` | IP de PC3 (BD principal) |
+| `servicios.monitoreo.host` | `10.43.101.27` | IP de PC3 (monitoreo) |
+| `servicios.monitoreo.host_replica` | `10.43.99.26` | IP de PC2 (réplica) |
+
+---
+
+## Prueba de tolerancia a fallos
+
+1. Iniciar el sistema completo (PC3 → PC2 → PC1).
+2. Abrir el cliente y hacer una consulta (opción 4 — estado global).
+3. Detener PC3 con Ctrl+C.
+4. Volver al cliente y hacer otra consulta — debe mostrar `[FAILOVER]` y responder desde PC2 en ≤ 4 s.
+5. El menú mostrará `[MODO REPLICA] Servidor: 10.43.99.26:7001`.
+
+---
+
+## Broker multihilo (pruebas de rendimiento)
+
+Para comparar rendimiento base vs. multihilo, cambiar la clase principal en `PC1/Trafico-PC1/pom.xml`:
+
+```xml
+<!-- Broker simple (base) -->
+<mainClass>com.trafico.LanzadorPC1</mainClass>
+
+<!-- Broker multihilo -->
+<mainClass>com.trafico.LanzadorPC1</mainClass>
+<!-- editar LanzadorPC1.java para usar ZMQMultihilo en lugar de ZeroMQ -->
+```
