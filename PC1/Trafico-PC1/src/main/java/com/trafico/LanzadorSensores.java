@@ -2,114 +2,103 @@ package com.trafico;
 
 import com.trafico.config.ConfiguracionSistema;
 import com.trafico.config.ConfiguracionSistema.ConfigSensor;
-import com.trafico.sensores.SensorCamara;
-import com.trafico.sensores.SensorEspira;
-import com.trafico.sensores.SensorGPS;
-import com.trafico.sensores.SensorTrafico;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Punto de entrada para ejecutar SOLO los sensores en un programa separado.
- *
- * Este lanzador permite ejecutar los sensores como un proceso independiente,
- * publicando eventos hacia el broker ZMQ (que debe estar en ejecución en
- * otra máquina/proceso).
- *
- * Los sensores se conectarán al broker especificado en config.json.
+ * Lanza cada sensor como un proceso JVM independiente via ProcessBuilder.
+ * Cada proceso es visible en `ps aux` con su clase y sensor_id en la línea de comando.
  *
  * Uso:
- *   java -cp Trafico-PC1.jar com.trafico.LanzadorSensores [ruta/config.json]
- *
- * Si no se especifica ruta, busca config.json en el directorio actual.
+ *   java -cp Trafico-PC1.jar com.trafico.LanzadorSensores [config.json]
+ *   Si no se pasa config, carga desde classpath (--resources).
  */
 public class LanzadorSensores {
 
     public static void main(String[] args) throws Exception {
+        String configArg = args.length > 0 ? args[0] : "--resources";
 
-        // Cargar configuración.
-        String rutaConfig = args.length > 0 ? args[0] : "config.json";
         ConfiguracionSistema cfg;
-
         try {
-            cfg = ConfiguracionSistema.cargar(rutaConfig);
+            cfg = "--resources".equals(configArg)
+                ? ConfiguracionSistema.cargarDesdeRecursos()
+                : ConfiguracionSistema.cargar(configArg);
         } catch (Exception e) {
-            System.out.println("[SENSORES] config.json no encontrado en disco, "
-                    + "cargando desde recursos internos...");
+            System.out.println("[SENSORES] config.json no encontrado en disco, cargando desde recursos internos...");
             cfg = ConfiguracionSistema.cargarDesdeRecursos();
+            configArg = "--resources";
         }
 
         System.out.println("╔════════════════════════════════════════════╗");
         System.out.println("║        SENSORES DE TRÁFICO - PC1           ║");
-        System.out.println("║   Generadores de Eventos (CÁMARA, ESPIRA, GPS)  ║");
+        System.out.println("║  Cada sensor = proceso independiente       ║");
         System.out.println("╚════════════════════════════════════════════╝");
-        System.out.println("[SENSORES] Ciudad       : "
+        System.out.println("[SENSORES] Ciudad  : "
                 + cfg.getCiudad().getFilas().size() + "x"
                 + cfg.getCiudad().getColumnas().size()
-                + " = " + cfg.getCiudad().getTotal_intersecciones()
-                + " intersecciones");
-        System.out.println("[SENSORES] Broker       : localhost:"
-                + cfg.getBroker().getPuerto_sub());
+                + " = " + cfg.getCiudad().getTotal_intersecciones() + " intersecciones");
+        System.out.println("[SENSORES] Broker  : localhost:" + cfg.getBroker().getPuerto_sub());
         System.out.println();
 
-        String brokerAddr = "tcp://localhost:" + cfg.getBroker().getPuerto_sub();
+        // Obtener ejecutable java y classpath del proceso actual
+        String javaExe = ProcessHandle.current().info().command().orElse("java");
+        String classpath = System.getProperty("java.class.path");
+        final String cfgFinal = configArg;
 
-        List<Thread> hilos = new ArrayList<>();
-        List<SensorTrafico> sensores = new ArrayList<>();
+        List<Process> procesos = new ArrayList<>();
 
-        // Lanzar sensores de CÁMARA.
+        // Lanzar sensores de CÁMARA
         for (ConfigSensor cs : cfg.getSensores().getCamaras()) {
-            SensorTrafico sensor = new SensorCamara(cs, brokerAddr);
-            sensores.add(sensor);
-            Thread t = new Thread(sensor, cs.getSensor_id());
-            t.setDaemon(false);
-            t.start();
-            hilos.add(t);
+            Process p = spawn(javaExe, classpath, "com.trafico.sensores.SensorCamara", cfgFinal, cs.getSensor_id());
+            procesos.add(p);
+            System.out.printf("[SENSORES] PID %-6d  SensorCamara  %s%n", p.pid(), cs.getSensor_id());
         }
-        System.out.printf("[SENSORES] %d sensor(es) de cámara iniciados.%n",
-                cfg.getSensores().getCamaras().size());
 
-        // Lanzar sensores de ESPIRA.
+        // Lanzar sensores de ESPIRA
         for (ConfigSensor cs : cfg.getSensores().getEspiras()) {
-            SensorTrafico sensor = new SensorEspira(cs, brokerAddr);
-            sensores.add(sensor);
-            Thread t = new Thread(sensor, cs.getSensor_id());
-            t.setDaemon(false);
-            t.start();
-            hilos.add(t);
+            Process p = spawn(javaExe, classpath, "com.trafico.sensores.SensorEspira", cfgFinal, cs.getSensor_id());
+            procesos.add(p);
+            System.out.printf("[SENSORES] PID %-6d  SensorEspira  %s%n", p.pid(), cs.getSensor_id());
         }
-        System.out.printf("[SENSORES] %d sensor(es) de espira iniciados.%n",
-                cfg.getSensores().getEspiras().size());
 
-        // Lanzar sensores GPS.
+        // Lanzar sensores GPS
         for (ConfigSensor cs : cfg.getSensores().getGps()) {
-            SensorTrafico sensor = new SensorGPS(cs, brokerAddr);
-            sensores.add(sensor);
-            Thread t = new Thread(sensor, cs.getSensor_id());
-            t.setDaemon(false);
-            t.start();
-            hilos.add(t);
+            Process p = spawn(javaExe, classpath, "com.trafico.sensores.SensorGPS", cfgFinal, cs.getSensor_id());
+            procesos.add(p);
+            System.out.printf("[SENSORES] PID %-6d  SensorGPS     %s%n", p.pid(), cs.getSensor_id());
         }
-        System.out.printf("[SENSORES] %d sensor(es) GPS iniciados.%n",
-                cfg.getSensores().getGps().size());
 
         System.out.println();
-        System.out.printf("[SENSORES] Total de sensores activos: %d%n", sensores.size());
-        System.out.println("[SENSORES] Sistema de sensores en ejecución. Ctrl+C para detener.");
+        System.out.printf("[SENSORES] %d procesos de sensor iniciados. " +
+                "Verifica con: ps aux | grep SensorCamara%n", procesos.size());
+        System.out.println("[SENSORES] Ctrl+C para detener todos.");
 
-        // Hook de apagado limpio.
+        // Apagado limpio: matar todos los hijos
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            System.out.println("\n[SENSORES] Apagando todos los sensores...");
-            sensores.forEach(SensorTrafico::detener);
-            hilos.forEach(Thread::interrupt);
-            System.out.println("[SENSORES] Sistema de sensores detenido correctamente.");
+            System.out.println("\n[SENSORES] Terminando procesos de sensores...");
+            procesos.forEach(Process::destroyForcibly);
+            System.out.println("[SENSORES] Todos los sensores detenidos.");
         }));
 
-        // Mantener proceso vivo mientras haya sensores corriendo.
-        for (Thread hilo : hilos) {
-            hilo.join();
+        // Bloquear hasta que todos los procesos terminen
+        for (Process p : procesos) {
+            try { p.waitFor(); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
         }
     }
-}
 
+    private static Process spawn(String javaExe, String classpath,
+                                  String mainClass, String config, String sensorId) throws IOException {
+        ProcessBuilder pb = new ProcessBuilder(
+            javaExe,
+            "-cp", classpath,
+            "-Dtrafico.sensor.id=" + sensorId,   // visible en `ps -f` como propiedad JVM
+            mainClass,
+            config,
+            sensorId
+        );
+        pb.inheritIO();  // stdout/stderr del sensor va al mismo terminal
+        return pb.start();
+    }
+}

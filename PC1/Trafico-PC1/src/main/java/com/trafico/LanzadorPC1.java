@@ -3,29 +3,20 @@ package com.trafico;
 import com.trafico.broker.ZeroMQ;
 import com.trafico.config.ConfiguracionSistema;
 import com.trafico.config.ConfiguracionSistema.ConfigSensor;
-import com.trafico.sensores.SensorCamara;
-import com.trafico.sensores.SensorEspira;
-import com.trafico.sensores.SensorGPS;
-import com.trafico.sensores.SensorTrafico;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Punto de entrada principal del PC1.
  *
- * Este lanzador permite dos modos de ejecución:
+ * Lanza el Broker ZMQ como hilo y cada sensor como proceso JVM independiente.
+ * Los sensores son visibles en `ps aux` como procesos separados.
  *
- * 1. MODO INTEGRADO (modo legacy): Lanza el Broker ZMQ y todos los sensores en el mismo proceso.
- *    Uso: java -cp Trafico-PC1.jar com.trafico.LanzadorPC1 [ruta/config.json]
+ * Uso: mvn exec:java  (usa com.trafico.LanzadorPC1 como mainClass)
  *
- * 2. MODO SEPARADO: Los componentes pueden ejecutarse en procesos independientes.
- *    - Broker:   java -cp Trafico-PC1.jar com.trafico.LanzadorBroker [ruta/config.json]
- *    - Sensores: java -cp Trafico-PC1.jar com.trafico.LanzadorSensores [ruta/config.json]
- *
- * En modo separado, asegúrate de iniciar primero el Broker, luego los Sensores.
- *
- * Si no se especifica ruta, busca config.json en el directorio actual.
+ * Si no se especifica ruta, carga config.json desde classpath (recursos internos).
  */
 public class LanzadorPC1 {
 
@@ -65,69 +56,73 @@ public class LanzadorPC1 {
                 + "s | prioridad=" + cfg.getSemaforos().getDuracion_prioridad() + "s");
         System.out.println();
 
-        String brokerAddr = "tcp://localhost:" + cfg.getBroker().getPuerto_sub();
-
-        List<Thread> hilos = new ArrayList<>();
-        List<SensorTrafico> sensores = new ArrayList<>();
-
-        // Lanzar Broker ZMQ en hilo propio.
+        // Lanzar Broker ZMQ en hilo propio (el broker vive en este proceso).
         ZeroMQ broker = new ZeroMQ(cfg);
         Thread hiloBroker = new Thread(broker::iniciar, "BrokerZMQ");
         hiloBroker.setDaemon(false);
         hiloBroker.start();
-        hilos.add(hiloBroker);
 
         // Esperar a que el broker levante antes de que los sensores publiquen.
         System.out.println("[PC1] Esperando al broker...");
         Thread.sleep(1000);
 
-        // Lanzar sensores de CÁMARA.
+        // Obtener ejecutable java y classpath del proceso actual para spawnar hijos.
+        String javaExe   = ProcessHandle.current().info().command().orElse("java");
+        String classpath = System.getProperty("java.class.path");
+        // Si se pasó un archivo de config, los hijos lo usarán; si no, usan recursos internos.
+        String cfgArg = (args.length > 0) ? args[0] : "--resources";
+
+        List<Process> procesos = new ArrayList<>();
+
+        // Lanzar sensores de CÁMARA como procesos independientes.
         for (ConfigSensor cs : cfg.getSensores().getCamaras()) {
-            SensorTrafico sensor = new SensorCamara(cs, brokerAddr);
-            sensores.add(sensor);
-            Thread t = new Thread(sensor, cs.getSensor_id());
-            t.setDaemon(true);
-            t.start();
-            hilos.add(t);
+            Process p = spawn(javaExe, classpath, "com.trafico.sensores.SensorCamara", cfgArg, cs.getSensor_id());
+            procesos.add(p);
+            System.out.printf("[PC1] PID %-6d  SensorCamara  %s%n", p.pid(), cs.getSensor_id());
         }
-        System.out.printf("[PC1] %d sensor(es) de cámara iniciados.%n", cfg.getSensores().getCamaras().size());
 
-        // Lanzar sensores de ESPIRA.
+        // Lanzar sensores de ESPIRA como procesos independientes.
         for (ConfigSensor cs : cfg.getSensores().getEspiras()) {
-            SensorTrafico sensor = new SensorEspira(cs, brokerAddr);
-            sensores.add(sensor);
-            Thread t = new Thread(sensor, cs.getSensor_id());
-            t.setDaemon(true);
-            t.start();
-            hilos.add(t);
+            Process p = spawn(javaExe, classpath, "com.trafico.sensores.SensorEspira", cfgArg, cs.getSensor_id());
+            procesos.add(p);
+            System.out.printf("[PC1] PID %-6d  SensorEspira  %s%n", p.pid(), cs.getSensor_id());
         }
-        System.out.printf("[PC1] %d sensor(es) de espira iniciados.%n", cfg.getSensores().getEspiras().size());
 
-        // Lanzar sensores GPS.
+        // Lanzar sensores GPS como procesos independientes.
         for (ConfigSensor cs : cfg.getSensores().getGps()) {
-            SensorTrafico sensor = new SensorGPS(cs, brokerAddr);
-            sensores.add(sensor);
-            Thread t = new Thread(sensor, cs.getSensor_id());
-            t.setDaemon(true);
-            t.start();
-            hilos.add(t);
+            Process p = spawn(javaExe, classpath, "com.trafico.sensores.SensorGPS", cfgArg, cs.getSensor_id());
+            procesos.add(p);
+            System.out.printf("[PC1] PID %-6d  SensorGPS     %s%n", p.pid(), cs.getSensor_id());
         }
-        System.out.printf("[PC1] %d sensor(es) GPS iniciados.%n", cfg.getSensores().getGps().size());
-        System.out.printf("[PC1] %d sensor(es) GPS iniciados.%n", cfg.getSensores().getGps().size());
 
         System.out.println();
-        System.out.println("[PC1] Sistema PC1 en ejecución. Ctrl+C para detener.");
+        System.out.printf("[PC1] Broker + %d procesos sensor iniciados. " +
+                "Verifica: ps aux | grep SensorCamara%n", procesos.size());
+        System.out.println("[PC1] Ctrl+C para detener todo.");
 
         // Hook de apagado limpio.
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             System.out.println("\n[PC1] Apagando todos los componentes...");
             broker.detener();
-            sensores.forEach(SensorTrafico::detener);
-            hilos.forEach(Thread::interrupt);
+            procesos.forEach(Process::destroyForcibly);
             System.out.println("[PC1] PC1 detenido correctamente.");
         }));
 
         // Mantener proceso vivo mientras el broker corra.
         hiloBroker.join();
+    }
+
+    private static Process spawn(String javaExe, String classpath,
+                                  String mainClass, String config, String sensorId) throws IOException {
+        ProcessBuilder pb = new ProcessBuilder(
+            javaExe,
+            "-cp", classpath,
+            "-Dtrafico.sensor.id=" + sensorId,
+            mainClass,
+            config,
+            sensorId
+        );
+        pb.inheritIO();
+        return pb.start();
     }
 }

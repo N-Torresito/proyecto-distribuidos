@@ -97,24 +97,38 @@ public class SensorEspira implements SensorTrafico {
         this.activo = false;
     }
 
-    // ─── Main: lanza UNA o TODAS las espiras ─────────────────────────────────
-    public static void main(String[] args) throws Exception {
-        String rutaConfig = args.length > 0 ? args[0] : "config.json";
-        String sensorId   = args.length > 1 ? args[1] : null;
+    /**
+     * Punto de entrada para un proceso sensor individual.
+     * args[0] = ruta config.json o "--resources"
+     * args[1] = sensor_id (obligatorio)
+     * Corre en el thread principal — este proceso ES el sensor.
+     */
+    public static void main(String[] args) {
+        if (args.length < 2) {
+            System.err.println("Uso: SensorEspira <config|--resources> <sensor_id>");
+            System.exit(1);
+        }
+        String configArg = args[0];
+        String sensorId  = args[1];
 
-        ConfiguracionSistema cfg = ConfiguracionSistema.cargar(rutaConfig);
+        ConfiguracionSistema cfg;
+        try {
+            cfg = "--resources".equals(configArg)
+                ? ConfiguracionSistema.cargarDesdeRecursos()
+                : ConfiguracionSistema.cargar(configArg);
+        } catch (Exception e) {
+            try { cfg = ConfiguracionSistema.cargarDesdeRecursos(); }
+            catch (Exception ex) { System.err.println("[ESPIRA] Error cargando config: " + ex.getMessage()); System.exit(1); return; }
+        }
 
-        String brokerAddr = "tcp://" + "localhost" + ":" + cfg.getBroker().getPuerto_sub();
+        ConfigSensor cs = cfg.getSensores().getEspiras().stream()
+                .filter(s -> s.getSensor_id().equals(sensorId))
+                .findFirst()
+                .orElse(null);
+        if (cs == null) { System.err.println("[ESPIRA] Sensor no encontrado: " + sensorId); System.exit(1); return; }
 
-        cfg.getSensores().getEspiras().stream()
-                .filter(s -> sensorId == null || s.getSensor_id().equals(sensorId))
-                .forEach(s -> {
-                    Thread t = new Thread(new SensorEspira(s, brokerAddr), s.getSensor_id());
-                    t.setDaemon(true);
-                    t.start();
-                    System.out.printf("[ESPIRA] Hilo iniciado: %s%n", s.getSensor_id());
-                });
-
-        Thread.currentThread().join();
+        String brokerAddr = "tcp://localhost:" + cfg.getBroker().getPuerto_sub();
+        // Corre en el thread principal — visible como proceso separado en `ps`
+        new SensorEspira(cs, brokerAddr).run();
     }
 }
