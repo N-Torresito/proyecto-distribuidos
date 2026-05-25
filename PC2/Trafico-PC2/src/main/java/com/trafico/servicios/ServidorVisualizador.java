@@ -315,89 +315,208 @@ public class ServidorVisualizador implements Runnable {
 <html lang="es">
 <head>
 <meta charset="UTF-8"/>
-<title>Monitoreo Tráfico — Sistema Distribuido</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Monitoreo Tráfico — PC2</title>
 <style>
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:monospace;background:#111;color:#eee;padding:12px}
-  h1{text-align:center;color:#0f0;margin-bottom:10px;font-size:1.1em;letter-spacing:2px}
-  #conn{text-align:center;font-size:.75em;margin-bottom:12px}
-  .ok{color:#0f0}.ko{color:#f44}
-  .layout{display:grid;grid-template-columns:1fr 340px;gap:12px}
-  /* -- Cuadrícula ciudad -- */
-  #ciudad{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
-  .celda{
-    background:#222;border:1px solid #333;border-radius:6px;
-    padding:6px 4px;text-align:center;position:relative;min-height:100px;
-    transition:background .4s
-  }
-  .celda.congestion{background:#3a1010;border-color:#a00}
-  .celda.normal{background:#102010;border-color:#060}
-  .celda-id{font-size:.65em;color:#888;margin-bottom:4px}
-  .sem-badge{
-    display:inline-block;width:14px;height:14px;border-radius:50%;
-    margin:2px;vertical-align:middle;border:1px solid #555;
-    background:#333;transition:background .4s
-  }
-  .sem-verde{background:#00e000;box-shadow:0 0 6px #0f0}
-  .sem-rojo {background:#dd0000;box-shadow:0 0 4px #f00}
-  .sem-label{font-size:.6em;color:#aaa;display:block;margin-top:2px}
-  .stats{font-size:.62em;color:#aaa;margin-top:4px;line-height:1.5}
-  /* -- Panel derecho -- */
-  .right-panel{display:flex;flex-direction:column;gap:10px}
-  #alertas{
-    flex:1;overflow-y:auto;max-height:420px;
-    background:#0d0d0d;border:1px solid #333;border-radius:6px;padding:8px
-  }
-  .alerta-item{font-size:.68em;padding:3px 0;border-bottom:1px solid #1a1a1a;color:#ccc}
-  .alerta-item.crit{color:#f88}
-  #resumen{
-    background:#0d0d0d;border:1px solid #333;border-radius:6px;padding:8px;font-size:.7em
-  }
-  #resumen h3{color:#0af;margin-bottom:6px;font-size:.8em}
-  .stat-row{display:flex;justify-content:space-between;padding:2px 0;color:#aaa}
-  .stat-val{color:#fff;font-weight:bold}
-  #legend{font-size:.65em;color:#555;text-align:center;margin-top:8px}
-  @media(max-width:900px){.layout{grid-template-columns:1fr}}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Courier New',monospace;background:#0d0d12;color:#ccc;padding:8px;min-height:100vh}
+
+/* ── HEADER ── */
+.header{display:flex;align-items:center;justify-content:space-between;
+        border-bottom:1px solid #1a2a3a;padding-bottom:6px;margin-bottom:8px}
+.title{color:#4fc3f7;font-size:.85em;letter-spacing:3px;text-transform:uppercase;font-weight:bold}
+.conn-badge{font-size:.65em;padding:3px 8px;border-radius:12px;border:1px solid #333}
+.conn-ok{color:#4caf50;border-color:#1a4a1a;background:#0a1a0a}
+.conn-ko{color:#f44336;border-color:#4a1a1a;background:#1a0a0a}
+
+/* ── LAYOUT ── */
+.layout{display:grid;grid-template-columns:1fr 280px;gap:8px;height:calc(100vh - 50px)}
+
+/* ══════════════════════════════════════════
+   MAPA CIUDAD
+══════════════════════════════════════════ */
+.map-section{display:flex;flex-direction:column;gap:4px}
+.map-label{font-size:.6em;color:#3a5a7a;letter-spacing:2px;text-align:center}
+
+/* Etiquetas de columna */
+.col-labels{display:grid;grid-template-columns:20px repeat(5,1fr);gap:3px;padding:0 2px}
+.col-lbl{text-align:center;font-size:.65em;color:#3a5a7a;font-weight:bold;line-height:1.8}
+
+/* Fila del mapa = etiqueta de fila + 5 nodos */
+.map-row{display:grid;grid-template-columns:20px repeat(5,1fr);gap:3px;align-items:stretch}
+.row-lbl{display:flex;align-items:center;justify-content:center;
+         font-size:.65em;color:#3a5a7a;font-weight:bold}
+
+/* ── Nodo / Intersección ── */
+.nodo{
+  background:#111318;
+  border:1px solid #1c2030;
+  border-radius:5px;
+  padding:5px 4px;
+  min-height:90px;
+  display:flex;flex-direction:column;gap:2px;
+  transition:background .5s,border-color .5s;
+  position:relative;overflow:hidden;
+}
+/* Congestion state */
+.nodo.cong{background:#1a0a0a;border-color:#5a1515}
+.nodo.cong::after{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,transparent,#f44,transparent);
+  animation:pulse-bar 1.2s ease-in-out infinite;
+}
+/* Normal (with sensor data) */
+.nodo.norm{background:#0a110a;border-color:#1a3a1a}
+/* No data yet */
+.nodo.empty{background:#0e0e14;border-color:#1a1a28}
+
+@keyframes pulse-bar{0%,100%{opacity:.3}50%{opacity:1}}
+
+/* Nodo header: ID + badges sensor */
+.nodo-head{display:flex;justify-content:space-between;align-items:flex-start}
+.nodo-id{font-size:.58em;color:#3a4a6a;line-height:1}
+.sensor-row{display:flex;gap:2px}
+.sbadge{font-size:.5em;padding:1px 3px;border-radius:3px;font-weight:bold;line-height:1.4}
+.s-cam{background:#0d2a4a;color:#4fc3f7}
+.s-esp{background:#1a0d3a;color:#ce93d8}
+.s-gps{background:#0d2a0d;color:#81c784}
+
+/* ── Semáforo visual ── */
+.sem-area{display:flex;align-items:center;gap:4px;margin:1px 0}
+
+/* Caja del semáforo físico */
+.tl-box{
+  background:#0a0a0a;border:1px solid #222;border-radius:3px;
+  padding:2px 3px;display:flex;gap:2px;align-items:center;
+}
+.tl-box.ns{flex-direction:column}     /* vertical = NORTE-SUR */
+.tl-box.eo{flex-direction:row}        /* horizontal = ESTE-OESTE */
+
+/* Bombillas del semáforo */
+.bulb{width:9px;height:9px;border-radius:50%;background:#1a1a1a;
+      border:1px solid #2a2a2a;transition:background .4s,box-shadow .4s}
+.bulb.verde{background:#00dd00;box-shadow:0 0 6px #00ee00,0 0 2px #00ff00}
+.bulb.rojo {background:#cc0000;box-shadow:0 0 5px #dd0000,0 0 2px #ff0000}
+
+/* Etiqueta del semáforo */
+.sem-info{display:flex;flex-direction:column}
+.sem-dir{font-size:.5em;color:#3a5a3a}
+.sem-val{font-size:.58em;font-weight:bold;line-height:1}
+.sem-val.verde{color:#4caf50}
+.sem-val.rojo {color:#f44336}
+.sem-val.init {color:#555}
+
+.no-sem{font-size:.5em;color:#1e1e2e;margin:2px 0}
+
+/* ── Datos sensor ── */
+.sensor-data{font-size:.55em;color:#2a3a5a;line-height:1.5;margin-top:auto}
+.sensor-data b{color:#5a7a9a}
+
+/* ══════════════════════════════════════════
+   PANEL DERECHO
+══════════════════════════════════════════ */
+.right-panel{display:flex;flex-direction:column;gap:6px;overflow:hidden}
+
+.panel{background:#0e0e14;border:1px solid #1a1a28;border-radius:6px;padding:8px}
+.panel-hdr{font-size:.62em;color:#3a7aaa;letter-spacing:2px;text-transform:uppercase;
+           margin-bottom:6px;border-bottom:1px solid #1a1a28;padding-bottom:3px}
+
+/* Stats grid */
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:6px}
+.stat-box{background:#08080f;border-radius:4px;padding:6px;text-align:center}
+.stat-n{font-size:1.5em;font-weight:bold;line-height:1}
+.stat-n.c-verde{color:#4caf50}
+.stat-n.c-rojo {color:#f44336}
+.stat-n.c-ev   {color:#4fc3f7}
+.stat-n.c-al   {color:#ff9800}
+.stat-lbl{font-size:.55em;color:#3a4a5a;margin-top:2px}
+
+.info-row{display:flex;justify-content:space-between;font-size:.6em;
+          padding:3px 0;border-bottom:1px solid #12121e;color:#3a4a5a}
+.info-row:last-child{border:none}
+.info-val{color:#9ab}
+
+/* Alertas */
+.alerts-panel{flex:1;min-height:0;display:flex;flex-direction:column}
+.alerts-list{flex:1;overflow-y:auto;max-height:320px}
+.alert-item{font-size:.6em;padding:3px 4px;border-bottom:1px solid #10101a;
+            color:#556;line-height:1.4;transition:color .3s}
+.alert-item:first-child{color:#8ab;border-left:2px solid #3a5a7a;padding-left:6px}
+.a-warn{color:#b87333!important}
+.a-warn:first-child{border-left-color:#b87333!important}
+.a-crit{color:#c44!important}
+.a-crit:first-child{border-left-color:#c44!important}
+
+/* Leyenda */
+.legend{display:flex;flex-wrap:wrap;gap:6px;font-size:.55em;
+        color:#2a3a4a;justify-content:center;margin-top:4px}
+.leg{display:flex;align-items:center;gap:3px}
+.leg-sq{width:8px;height:8px;border-radius:2px}
+
+@media(max-width:860px){.layout{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
-<h1>SISTEMA MONITOREO TRÁFICO DISTRIBUIDO</h1>
-<div id="conn"><span class="ko">⬤ Sin conexión</span></div>
+
+<div class="header">
+  <div class="title">&#9632; Gestión Inteligente de Tráfico Urbano — PC2</div>
+  <div id="badge" class="conn-badge conn-ko">Sin conexión</div>
+</div>
 
 <div class="layout">
-  <!-- Cuadrícula 5x5 -->
-  <div id="ciudad"></div>
 
-  <!-- Panel derecho -->
-  <div class="right-panel">
-    <div id="alertas">
-      <div style="color:#555;font-size:.75em;padding:4px">Esperando eventos...</div>
+  <!-- ════ MAPA ════ -->
+  <div class="map-section">
+    <div class="map-label">CUADRÍCULA CIUDAD 5×5 — TIEMPO REAL</div>
+    <div class="col-labels">
+      <div></div>
+      <div class="col-lbl">1</div><div class="col-lbl">2</div><div class="col-lbl">3</div>
+      <div class="col-lbl">4</div><div class="col-lbl">5</div>
     </div>
-    <div id="resumen">
-      <h3>RESUMEN SISTEMA</h3>
-      <div class="stat-row"><span>Semáforos VERDE</span><span class="stat-val" id="cnt-verde">0</span></div>
-      <div class="stat-row"><span>Semáforos ROJO</span><span class="stat-val" id="cnt-rojo">0</span></div>
-      <div class="stat-row"><span>Intersecciones con semáforo</span><span class="stat-val">15</span></div>
-      <div class="stat-row"><span>Alertas recibidas</span><span class="stat-val" id="cnt-alertas">0</span></div>
-      <div class="stat-row"><span>Eventos totales</span><span class="stat-val" id="cnt-eventos">0</span></div>
-      <div class="stat-row"><span>Última actualización</span><span class="stat-val" id="ultima-ts">—</span></div>
+    <div id="map-grid"></div>
+    <div class="legend">
+      <div class="leg"><div class="leg-sq" style="background:#1a0a0a;border:1px solid #5a1515"></div>Congestión</div>
+      <div class="leg"><div class="leg-sq" style="background:#0a110a;border:1px solid #1a3a1a"></div>Normal</div>
+      <div class="leg"><div class="bulb verde" style="width:8px;height:8px;display:inline-block"></div>VERDE</div>
+      <div class="leg"><div class="bulb rojo"  style="width:8px;height:8px;display:inline-block"></div>ROJO</div>
+      <div class="leg"><span class="sbadge s-cam">CAM</span>Cámara</div>
+      <div class="leg"><span class="sbadge s-esp">ESP</span>Espira</div>
+      <div class="leg"><span class="sbadge s-gps">GPS</span>GPS</div>
     </div>
   </div>
-</div>
-<div id="legend">
-  NS = NORTE-SUR &nbsp;|&nbsp; EO = ESTE-OESTE &nbsp;|&nbsp;
-  <span style="color:#0f0">●</span> VERDE &nbsp;
-  <span style="color:#f00">●</span> ROJO &nbsp;
-  <span style="color:#333">●</span> Sin dato
+
+  <!-- ════ PANEL ════ -->
+  <div class="right-panel">
+    <div class="panel">
+      <div class="panel-hdr">Resumen Sistema</div>
+      <div class="stats-grid">
+        <div class="stat-box"><div class="stat-n c-verde" id="cv">0</div><div class="stat-lbl">VERDE</div></div>
+        <div class="stat-box"><div class="stat-n c-rojo"  id="cr">0</div><div class="stat-lbl">ROJO</div></div>
+        <div class="stat-box"><div class="stat-n c-ev"    id="ce">0</div><div class="stat-lbl">Eventos</div></div>
+        <div class="stat-box"><div class="stat-n c-al"    id="ca">0</div><div class="stat-lbl">Alertas</div></div>
+      </div>
+      <div class="info-row"><span>Semáforos totales</span><span class="info-val">15 / 25</span></div>
+      <div class="info-row"><span>Intersecciones activas</span><span class="info-val" id="ci">0 / 25</span></div>
+      <div class="info-row"><span>Última actualización</span><span class="info-val" id="lu">—</span></div>
+    </div>
+
+    <div class="panel alerts-panel">
+      <div class="panel-hdr">Alertas y Eventos</div>
+      <div class="alerts-list" id="al-list">
+        <div class="alert-item" data-ph="1">Esperando eventos del sistema...</div>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <script>
-// ── Configuración de la cuadrícula ──────────────────────────────────────────
-const FILAS = ['A','B','C','D','E'];
-const COLS  = [1, 2, 3, 4, 5];
+// ─── Mapa de intersecciones ───────────────────────────────────────────────────
+const ROWS = ['A','B','C','D','E'];
+const COLS = [1,2,3,4,5];
 
-// Direcciones por intersección (NS=NORTE-SUR, EO=ESTE-OESTE)
-const SEMAFOROS = {
+// Semáforos: intersección → dirección
+const SEMS = {
   'INT-A1':'NS','INT-A2':'EO','INT-A3':'NS',
   'INT-B1':'NS','INT-B3':'NS','INT-B4':'EO',
   'INT-C1':'NS','INT-C4':'EO','INT-C5':'NS',
@@ -405,120 +524,172 @@ const SEMAFOROS = {
   'INT-E2':'EO','INT-E4':'EO','INT-E5':'NS'
 };
 
-let cntAlertas = 0, cntEventos = 0;
-const semState = {};     // interseccion → 'VERDE'|'ROJO'
-const sensorState = {};  // interseccion → 'CONGESTION'|'NORMAL'
+// Sensores: intersección → tipo
+const SENS = {
+  'INT-A1':'CAM','INT-A2':'ESP','INT-A3':'GPS',
+  'INT-B1':'GPS','INT-B3':'CAM','INT-B4':'ESP',
+  'INT-C1':'ESP','INT-C4':'GPS','INT-C5':'CAM',
+  'INT-D2':'CAM','INT-D3':'ESP','INT-D5':'GPS',
+  'INT-E2':'GPS','INT-E4':'CAM','INT-E5':'ESP'
+};
 
-// ── Construir cuadrícula ─────────────────────────────────────────────────────
-const grid = document.getElementById('ciudad');
-FILAS.forEach(f => {
-  COLS.forEach(c => {
-    const id = `INT-${f}${c}`;
-    const hasSem = id in SEMAFOROS;
-    const div = document.createElement('div');
-    div.className = 'celda';
-    div.id = `cell-${id}`;
-    div.innerHTML = `
-      <div class="celda-id">${id}</div>
-      ${hasSem ? `
-        <span class="sem-badge" id="sem-${id}" title="${SEMAFOROS[id]}"></span>
-        <span class="sem-label">${SEMAFOROS[id]}</span>
-      ` : '<span style="font-size:.6em;color:#444">sin semáforo</span>'}
-      <div class="stats" id="stats-${id}">—</div>
-    `;
-    grid.appendChild(div);
+// Estado en memoria
+const semState = {}, trafico = {};
+let nEv=0, nAl=0, nActivas=new Set();
+
+// ─── Construir cuadrícula ─────────────────────────────────────────────────────
+function buildGrid() {
+  const grid = document.getElementById('map-grid');
+  ROWS.forEach(r => {
+    const row = document.createElement('div');
+    row.className = 'map-row';
+    row.innerHTML = `<div class="row-lbl">${r}</div>`;
+    COLS.forEach(c => {
+      const id = `INT-${r}${c}`;
+      const dir = SEMS[id];
+      const sen = SENS[id];
+      const scls = sen==='CAM'?'s-cam':sen==='ESP'?'s-esp':'s-gps';
+
+      const semHtml = dir ? `
+        <div class="sem-area">
+          <div class="tl-box ${dir.toLowerCase()}" id="tl-${id}">
+            <div class="bulb" id="b0-${id}"></div>
+            <div class="bulb" id="b1-${id}"></div>
+          </div>
+          <div class="sem-info">
+            <span class="sem-dir">${dir}</span>
+            <span class="sem-val init" id="sv-${id}">—</span>
+          </div>
+        </div>` : `<div class="no-sem">sin semáforo</div>`;
+
+      const sensHtml = sen ? `<span class="sbadge ${scls}">${sen}</span>` : '';
+
+      row.innerHTML += `
+        <div class="nodo empty" id="n-${id}">
+          <div class="nodo-head">
+            <span class="nodo-id">${id}</span>
+            <div class="sensor-row">${sensHtml}</div>
+          </div>
+          ${semHtml}
+          <div class="sensor-data" id="sd-${id}">—</div>
+        </div>`;
+    });
+    grid.appendChild(row);
   });
-});
+}
 
-// ── SSE ──────────────────────────────────────────────────────────────────────
-const connDiv = document.getElementById('conn');
-let es;
+// ─── Actualizar semáforo ───────────────────────────────────────────────────────
+function setSem(id, estado) {
+  semState[id] = estado;
+  const verde = estado === 'VERDE';
+  const b0 = document.getElementById(`b0-${id}`);
+  const b1 = document.getElementById(`b1-${id}`);
+  const sv = document.getElementById(`sv-${id}`);
+  if (!b0) return;
+  // b0 = bombilla superior/izquierda (verde), b1 = inferior/derecha (rojo)
+  b0.className = 'bulb' + (verde ? ' verde' : '');
+  b1.className = 'bulb' + (verde ? '' : ' rojo');
+  sv.textContent = estado;
+  sv.className   = 'sem-val ' + (verde ? 'verde' : 'rojo');
+  updateCounts();
+}
 
-function conectar() {
-  es = new EventSource('/events');
+// ─── Actualizar nodo (estado tráfico) ────────────────────────────────────────
+function setNodo(id, estado) {
+  trafico[id] = estado;
+  nActivas.add(id);
+  const n = document.getElementById(`n-${id}`);
+  if (n) n.className = 'nodo ' + (estado==='CONGESTION' ? 'cong' : 'norm');
+  document.getElementById('ci').textContent = nActivas.size + ' / 25';
+}
+
+function setSensorData(id, html) {
+  const el = document.getElementById(`sd-${id}`);
+  if (el) el.innerHTML = html;
+}
+
+// ─── Contadores ───────────────────────────────────────────────────────────────
+function updateCounts() {
+  let v=0,r=0;
+  for (const [k,s] of Object.entries(semState)) {
+    if (k in SEMS) (s==='VERDE'?v++:r++);
+  }
+  document.getElementById('cv').textContent = v;
+  document.getElementById('cr').textContent = r;
+}
+
+// ─── Alertas ─────────────────────────────────────────────────────────────────
+function addAlert(txt, lvl='') {
+  nAl++;
+  document.getElementById('ca').textContent = nAl;
+  const list = document.getElementById('al-list');
+  if (list.querySelector('[data-ph]')) list.innerHTML = '';
+  const d = document.createElement('div');
+  d.className = 'alert-item ' + (lvl==='crit'?'a-crit':lvl==='warn'?'a-warn':'');
+  d.textContent = hhmm() + ' ' + txt;
+  list.prepend(d);
+  while (list.children.length > 100) list.lastChild.remove();
+}
+
+function hhmm() {
+  return new Date().toLocaleTimeString('es',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'});
+}
+
+// ─── SSE ──────────────────────────────────────────────────────────────────────
+function connect() {
+  const es = new EventSource('/events');
+  const badge = document.getElementById('badge');
+
   es.onopen = () => {
-    connDiv.innerHTML = '<span class="ok">⬤ Conectado</span>';
+    badge.className = 'conn-badge conn-ok';
+    badge.textContent = 'Conectado';
   };
-  es.onmessage = (e) => {
+
+  es.onmessage = e => {
     try {
       const ev = JSON.parse(e.data);
-      cntEventos++;
-      document.getElementById('cnt-eventos').textContent = cntEventos;
-      document.getElementById('ultima-ts').textContent = new Date().toLocaleTimeString();
+      nEv++;
+      document.getElementById('ce').textContent = nEv;
+      document.getElementById('lu').textContent = hhmm();
+      const p = ev.payload;
 
-      if (ev.tipo === 'semaforo')  handleSemaforo(ev.payload);
-      else if (ev.tipo === 'sensor')  handleSensor(ev.payload);
-      else if (ev.tipo === 'alerta')  handleAlerta(ev.payload);
+      if (ev.tipo === 'semaforo') {
+        setSem(p.interseccion, p.estado);
+        const dur = p.duracion ? ` ${p.duracion}s` : '';
+        addAlert(`[SEM] ${p.interseccion} → ${p.estado} (${p.direccion||''})${dur}`);
+
+      } else if (ev.tipo === 'sensor') {
+        setNodo(p.interseccion, p.estado);
+        const cong = p.estado==='CONGESTION';
+        let html='';
+        if (p.tipo==='CAMARA') {
+          html = `<b>Cola:</b>${p.cola} veh &nbsp;<b>Vel:</b>${p.velocidad} km/h`;
+          if (cong) addAlert(`[CAM] ${p.interseccion}: cola=${p.cola} vel=${p.velocidad}km/h`, 'warn');
+        } else if (p.tipo==='ESPIRA') {
+          html = `<b>Veh:</b>${p.vehiculos}/min`;
+          if (cong) addAlert(`[ESP] ${p.interseccion}: ${p.vehiculos}veh/min`, 'warn');
+        } else if (p.tipo==='GPS') {
+          html = `<b>Dens:</b>${p.velocidad} veh/km`;
+          if (cong) addAlert(`[GPS] ${p.interseccion}: densidad alta`, 'warn');
+        }
+        setSensorData(p.interseccion, html);
+
+      } else if (ev.tipo === 'alerta') {
+        addAlert(p, 'crit');
+      }
     } catch(err) { console.error(err); }
   };
+
   es.onerror = () => {
-    connDiv.innerHTML = '<span class="ko">⬤ Reconectando...</span>';
+    badge.className = 'conn-badge conn-ko';
+    badge.textContent = 'Reconectando...';
     es.close();
-    setTimeout(conectar, 3000);
+    setTimeout(connect, 3000);
   };
 }
-conectar();
 
-// ── Handlers ──────────────────────────────────────────────────────────────────
-function handleSemaforo(p) {
-  const inter = p.interseccion;
-  const estado = p.estado;
-  semState[inter] = estado;
-
-  const badge = document.getElementById(`sem-${inter}`);
-  if (badge) {
-    badge.className = 'sem-badge ' + (estado === 'VERDE' ? 'sem-verde' : 'sem-rojo');
-    badge.title = (p.direccion || '') + ' → ' + estado +
-                  (p.bloqueada ? ` | ${p.bloqueada} bloqueada` : '');
-  }
-  actualizarCelda(inter);
-  actualizarContadores();
-}
-
-function handleSensor(p) {
-  const inter = p.interseccion;
-  sensorState[inter] = p.estado;
-
-  const statsEl = document.getElementById(`stats-${inter}`);
-  if (statsEl) {
-    let txt = '';
-    if (p.tipo === 'CAMARA')  txt = `cola:${p.cola} vel:${p.velocidad}km/h`;
-    if (p.tipo === 'ESPIRA')  txt = `veh:${p.vehiculos}/min`;
-    if (p.tipo === 'GPS')     txt = `dens:${p.velocidad}`;
-    statsEl.textContent = `[${p.tipo}] ${txt}`;
-  }
-  actualizarCelda(inter);
-}
-
-function handleAlerta(texto) {
-  cntAlertas++;
-  document.getElementById('cnt-alertas').textContent = cntAlertas;
-
-  const alertasDiv = document.getElementById('alertas');
-  if (alertasDiv.querySelector('[data-placeholder]')) alertasDiv.innerHTML = '';
-  const item = document.createElement('div');
-  item.className = 'alerta-item' + (texto.includes('ALERTA') ? ' crit' : '');
-  item.textContent = texto;
-  alertasDiv.prepend(item);
-  // Limitar a 80 items en DOM
-  while (alertasDiv.children.length > 80) alertasDiv.removeChild(alertasDiv.lastChild);
-}
-
-function actualizarCelda(inter) {
-  const cell = document.getElementById(`cell-${inter}`);
-  if (!cell) return;
-  const congestion = sensorState[inter] === 'CONGESTION';
-  cell.className = 'celda ' + (congestion ? 'congestion' : 'normal');
-}
-
-function actualizarContadores() {
-  let verde = 0, rojo = 0;
-  for (const v of Object.values(semState)) {
-    if (v === 'VERDE') verde++; else rojo++;
-  }
-  document.getElementById('cnt-verde').textContent = verde;
-  document.getElementById('cnt-rojo').textContent  = rojo;
-}
+buildGrid();
+connect();
 </script>
 </body>
 </html>

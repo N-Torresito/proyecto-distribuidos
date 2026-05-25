@@ -48,9 +48,10 @@ public class ZeroMQ {
             suscriptor.subscribe(Topicos.CAMARA.getBytes(ZMQ.CHARSET));
             suscriptor.subscribe(Topicos.ESPIRA.getBytes(ZMQ.CHARSET));
             suscriptor.subscribe(Topicos.GPS.getBytes(ZMQ.CHARSET));
+            suscriptor.subscribe(Topicos.SEMAFORO_ESTADO.getBytes(ZMQ.CHARSET));
 
             System.out.println("[BROKER] SUB escuchando en: " + puertoSub);
-            System.out.println("[BROKER] Suscrito a tópicos: " + Topicos.CAMARA + ", " + Topicos.ESPIRA + ", " + Topicos.GPS);
+            System.out.println("[BROKER] Suscrito a tópicos: " + Topicos.CAMARA + ", " + Topicos.ESPIRA + ", " + Topicos.GPS + ", " + Topicos.SEMAFORO_ESTADO);
 
             // Socket PUB, reenvía eventos al Servicio de Analítica en PC2.
             ZMQ.Socket publicador = context.createSocket(SocketType.PUB);

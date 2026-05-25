@@ -53,7 +53,8 @@ public class ZMQMultihilo {
             suscriptor.subscribe(Topicos.CAMARA.getBytes(ZMQ.CHARSET));
             suscriptor.subscribe(Topicos.ESPIRA.getBytes(ZMQ.CHARSET));
             suscriptor.subscribe(Topicos.GPS.getBytes(ZMQ.CHARSET));
-            System.out.printf("[BROKER-MT] SUB en puerto %d%n", config.getBroker().getPuerto_sub());
+            suscriptor.subscribe(Topicos.SEMAFORO_ESTADO.getBytes(ZMQ.CHARSET));
+            System.out.printf("[BROKER-MT] SUB en puerto %d (+ ESTADO_SEMAFORO)%n", config.getBroker().getPuerto_sub());
 
             // Socket PUSH interno: distribuye a workers.
             ZMQ.Socket pushInterno = context.createSocket(SocketType.PUSH);

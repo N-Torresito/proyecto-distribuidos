@@ -49,9 +49,11 @@ public class ServicioControlSemaforos implements Runnable {
 
         try (ZContext ctx = new ZContext()) {
 
-            // PUB → broker: publica cambios de estado al visualizador
+            // PUB → broker: publica cambios de estado al visualizador.
+            // En single-machine host_pc2 == esta máquina == donde corre el broker.
+            // Para multi-PC, cambiar host_pc2 por la IP real del PC1 (broker).
             ZMQ.Socket socketPub = ctx.createSocket(SocketType.PUB);
-            socketPub.connect("tcp://localhost:" + config.getBroker().getPuerto_sub());
+            socketPub.connect("tcp://" + config.getBroker().getHost_pc2() + ":" + config.getBroker().getPuerto_sub());
             Thread.sleep(300); // ZMQ connection warm-up
 
             // REP → analytics: recibe comandos de cambio de fase
