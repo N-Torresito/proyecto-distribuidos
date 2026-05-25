@@ -32,14 +32,8 @@ public class GestorBaseDato implements Runnable {
     private String DB_HOST_FALLBACK;
 
     private static final String SQL_INSERT =
-        "INSERT INTO analisis_trafico (interseccion, estado, timestamp, velocidad_promedio, densidad, cola) " +
-        "VALUES (?, ?, ?, ?, ?, ?) " +
-        "ON CONFLICT (interseccion) DO UPDATE SET " +
-        "  estado = EXCLUDED.estado, " +
-        "  timestamp = EXCLUDED.timestamp, " +
-        "  velocidad_promedio = EXCLUDED.velocidad_promedio, " +
-        "  densidad = EXCLUDED.densidad, " +
-        "  cola = EXCLUDED.cola;";
+        "INSERT INTO analisis_trafico (timestamp, interseccion, estado, velocidad_promedio, densidad, cola) " +
+        "VALUES (?, ?, ?, ?, ?, ?)";
 
     public GestorBaseDato() {
         this.config = ConfiguracionSistema.getInstancia();
@@ -102,16 +96,21 @@ public class GestorBaseDato implements Runnable {
             // Crear tabla si no existe
             String createTableSQL =
                 "CREATE TABLE IF NOT EXISTS analisis_trafico (" +
-                "  interseccion VARCHAR(50) PRIMARY KEY, " +
+                "  timestamp VARCHAR(50) PRIMARY KEY, " +
+                "  interseccion VARCHAR(50) NOT NULL, " +
                 "  estado VARCHAR(20) NOT NULL, " +
-                "  timestamp VARCHAR(50) NOT NULL, " +
                 "  velocidad_promedio DOUBLE PRECISION, " +
                 "  densidad INTEGER, " +
-                "  cola INTEGER, " +
-                "  fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
+                "  cola INTEGER" +
                 ");";
 
+            String createIndexSQL =
+                "CREATE INDEX IF NOT EXISTS idx_at_interseccion ON analisis_trafico(interseccion);";
+
             try (PreparedStatement stmt = conn.prepareStatement(createTableSQL)) {
+                stmt.execute();
+            }
+            try (PreparedStatement stmt = conn.prepareStatement(createIndexSQL)) {
                 stmt.execute();
             }
 
@@ -182,9 +181,9 @@ public class GestorBaseDato implements Runnable {
 
             // Ejecutar INSERT
             try (PreparedStatement stmt = conn.prepareStatement(SQL_INSERT)) {
-                stmt.setString(1, interseccion);
-                stmt.setString(2, estado);
-                stmt.setString(3, timestamp);
+                stmt.setString(1, timestamp);
+                stmt.setString(2, interseccion);
+                stmt.setString(3, estado);
 
                 // Establecer valores, permitiendo NULL para sensores opcionales
                 if (velocidadPromedio != null) {
@@ -242,9 +241,9 @@ public class GestorBaseDato implements Runnable {
             conn = DriverManager.getConnection(urlFallback, DB_USER, DB_PASSWORD);
 
             try (PreparedStatement stmt = conn.prepareStatement(SQL_INSERT)) {
-                stmt.setString(1, interseccion);
-                stmt.setString(2, estado);
-                stmt.setString(3, timestamp);
+                stmt.setString(1, timestamp);
+                stmt.setString(2, interseccion);
+                stmt.setString(3, estado);
 
                 // Establecer valores, permitiendo NULL para sensores opcionales
                 if (velocidadPromedio != null) {
