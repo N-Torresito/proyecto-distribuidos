@@ -19,6 +19,9 @@ public final class Topicos {
     /** Tópico para eventos de sensores GPS (densidad de tráfico) */
     public static final String GPS = "EVENTO_DENSIDAD_TRAFICO";
 
+    /** Estado de semáforo publicado por ServicioControlSemaforos al broker */
+    public static final String SEMAFORO_ESTADO = "ESTADO_SEMAFORO";
+
     /** Separador entre el tópico y el payload JSON en el mensaje ZMQ */
     public static final String SEPARADOR = " ";
 }

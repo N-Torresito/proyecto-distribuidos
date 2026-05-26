@@ -91,11 +91,11 @@ public class ServicioAnalitica implements Runnable {
             System.out.println("[ANALITICA] Socket PUSH (BD) conectado en: " + uriPushBD);
 
             // Socket PULL para recibir comandos de prioridad del modulo de Monitoreo (PC3)
+            // BIND: analítica es endpoint estable; PC3 PUSH conecta hacia aquí
             ZMQ.Socket socketPullMonitoreo = context.createSocket(SocketType.PULL);
-            String uriPullMonitoreo = "tcp://" + config.getServicios().getAnalitica().getHost() +
-                                      ":" + config.getServicios().getMonitoreo().getPuerto_reqrep();
-            socketPullMonitoreo.connect(uriPullMonitoreo);
-            System.out.println("[ANALITICA] Socket PULL (Monitoreo) conectado en: " + uriPullMonitoreo);
+            String uriPullMonitoreo = "tcp://*:" + config.getServicios().getAnalitica().getPuerto_pull_monitoreo();
+            socketPullMonitoreo.bind(uriPullMonitoreo);
+            System.out.println("[ANALITICA] Socket PULL (Monitoreo) enlazado en: " + uriPullMonitoreo);
 
             // Mapa para agrupar eventos por interseccion (buffer corto)
             Map<String, EventosInterseccion> bufferEventos = new HashMap<>();
@@ -323,12 +323,10 @@ public class ServicioAnalitica implements Runnable {
                     datosProcesados.put("cola", eventoCamara.getVolumen());
                 }
 
-                if (datosProcesados.get("estado") != "CONGESTION") {
-                    String datosProcesadosJson = objectMapper.writeValueAsString(datosProcesados);
-                    socketPushBD.send(datosProcesadosJson.getBytes(), 0);
-                    System.out.println("[ANALITICA]   PUSH BD exitoso | " + interseccion + " | " +
-                            Instant.now().toString());
-                }
+                String datosProcesadosJson = objectMapper.writeValueAsString(datosProcesados);
+                socketPushBD.send(datosProcesadosJson.getBytes(), 0);
+                System.out.println("[ANALITICA]   PUSH BD exitoso | " + interseccion + " | " +
+                        Instant.now().toString());
             } catch (Exception e) {
                 System.err.println("[ANALITICA] Error enviando datos a BD: " + e.getMessage());
             }

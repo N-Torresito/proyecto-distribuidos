@@ -147,12 +147,13 @@ public class ConfiguracionSistema {
         public void setUmbral_congestion_densidad(int v) { this.umbral_congestion_densidad = v; }
     }
 
-    // Semaforos, tiempos de fase por estado de tráfico.
+    // Semaforos, tiempos de fase por estado de tráfico y lista explícita.
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Semaforos {
-        private int duracion_normal; // segundos en fase verde — tráfico normal.
-        private int duracion_congestion; // segundos en fase verde — congestión.
-        private int duracion_prioridad; // segundos en fase verde — ola verde / ambulancia.
+        private int duracion_normal;
+        private int duracion_congestion;
+        private int duracion_prioridad;
+        private List<ConfigSemaforo> lista;
 
         public int getDuracion_normal() { return duracion_normal; }
         public void setDuracion_normal(int v) { this.duracion_normal = v; }
@@ -160,6 +161,22 @@ public class ConfiguracionSistema {
         public void setDuracion_congestion(int v) { this.duracion_congestion = v; }
         public int getDuracion_prioridad() { return duracion_prioridad; }
         public void setDuracion_prioridad(int v) { this.duracion_prioridad = v; }
+        public List<ConfigSemaforo> getLista() { return lista; }
+        public void setLista(List<ConfigSemaforo> lista) { this.lista = lista; }
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class ConfigSemaforo {
+        private String semaforo_id;
+        private String interseccion;
+        private String direccion;
+
+        public String getSemaforo_id() { return semaforo_id; }
+        public void setSemaforo_id(String v) { this.semaforo_id = v; }
+        public String getInterseccion() { return interseccion; }
+        public void setInterseccion(String v) { this.interseccion = v; }
+        public String getDireccion() { return direccion; }
+        public void setDireccion(String v) { this.direccion = v; }
     }
 
     // Servicios, hosts y puertos de cada servicio del sistema.
@@ -182,6 +199,7 @@ public class ConfiguracionSistema {
         private String host;
         private int puerto_pull;
         private int puerto_push_semaforoctl;
+        private int puerto_pull_monitoreo;
 
         public String getHost() { return host; }
         public void setHost(String v) { this.host = v; }
@@ -189,6 +207,8 @@ public class ConfiguracionSistema {
         public void setPuerto_pull(int v){ this.puerto_pull = v; }
         public int getPuerto_push_semaforoctl() { return puerto_push_semaforoctl; }
         public void setPuerto_push_semaforoctl(int v) { this.puerto_push_semaforoctl = v; }
+        public int getPuerto_pull_monitoreo() { return puerto_pull_monitoreo; }
+        public void setPuerto_pull_monitoreo(int v) { this.puerto_pull_monitoreo = v; }
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
@@ -213,10 +233,19 @@ public class ConfiguracionSistema {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class ServicioMonitoreo {
+        private String host;
+        private String host_replica;
         private int puerto_reqrep;
+        private int puerto_replica;
 
+        public String getHost() { return host; }
+        public void setHost(String v) { this.host = v; }
+        public String getHost_replica() { return host_replica; }
+        public void setHost_replica(String v) { this.host_replica = v; }
         public int getPuerto_reqrep() { return puerto_reqrep; }
         public void setPuerto_reqrep(int v) { this.puerto_reqrep = v; }
+        public int getPuerto_replica() { return puerto_replica; }
+        public void setPuerto_replica(int v) { this.puerto_replica = v; }
     }
 }
 

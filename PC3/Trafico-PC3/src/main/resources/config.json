@@ -12,12 +12,30 @@
   "semaforos": {
     "duracion_normal": 15,
     "duracion_congestion": 25,
-    "duracion_prioridad": 40
+    "duracion_prioridad": 40,
+    "lista": [
+      {"semaforo_id":"SEM-A1","interseccion":"INT-A1","direccion":"NORTE-SUR"},
+      {"semaforo_id":"SEM-A2","interseccion":"INT-A2","direccion":"ESTE-OESTE"},
+      {"semaforo_id":"SEM-A3","interseccion":"INT-A3","direccion":"NORTE-SUR"},
+      {"semaforo_id":"SEM-B1","interseccion":"INT-B1","direccion":"NORTE-SUR"},
+      {"semaforo_id":"SEM-B3","interseccion":"INT-B3","direccion":"NORTE-SUR"},
+      {"semaforo_id":"SEM-B4","interseccion":"INT-B4","direccion":"ESTE-OESTE"},
+      {"semaforo_id":"SEM-C1","interseccion":"INT-C1","direccion":"NORTE-SUR"},
+      {"semaforo_id":"SEM-C4","interseccion":"INT-C4","direccion":"ESTE-OESTE"},
+      {"semaforo_id":"SEM-C5","interseccion":"INT-C5","direccion":"NORTE-SUR"},
+      {"semaforo_id":"SEM-D2","interseccion":"INT-D2","direccion":"ESTE-OESTE"},
+      {"semaforo_id":"SEM-D3","interseccion":"INT-D3","direccion":"NORTE-SUR"},
+      {"semaforo_id":"SEM-D5","interseccion":"INT-D5","direccion":"NORTE-SUR"},
+      {"semaforo_id":"SEM-E2","interseccion":"INT-E2","direccion":"ESTE-OESTE"},
+      {"semaforo_id":"SEM-E4","interseccion":"INT-E4","direccion":"ESTE-OESTE"},
+      {"semaforo_id":"SEM-E5","interseccion":"INT-E5","direccion":"NORTE-SUR"}
+    ]
   },
   "servicios": {
     "analitica": {
       "host": "10.43.99.26",
-      "puerto_pull": 6000
+      "puerto_pull": 6000,
+      "puerto_pull_monitoreo": 6002
     },
     "base_datos": {
       "host": "10.43.101.27",
@@ -27,7 +45,10 @@
       "password": ""
     },
     "monitoreo": {
-        "puerto_reqrep": 7000
+        "host": "10.43.101.27",
+        "host_replica": "10.43.99.26",
+        "puerto_reqrep": 7000,
+        "puerto_replica": 7001
     }
   },
   "sensores": {

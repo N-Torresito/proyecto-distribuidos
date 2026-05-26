@@ -33,12 +33,10 @@ public class ServicioControlSemaforos implements Runnable {
     public void run() {
         System.out.println("[SEMAFOROCTL] Iniciando ServicioControlSemaForos...");
 
-        // Inicializar semáforos en estado ROJO
-        List<ConfiguracionSistema.ConfigSensor> sensores = config.getSensores().getCamaras();
-        for (ConfiguracionSistema.ConfigSensor sensor : sensores) {
-            String interseccion = sensor.getInterseccion();
-            semaforosPorInterseccion.put(interseccion,
-                new EstadoSemaforoInterseccion(interseccion, "ROJO", 0));
+        // Inicializar semáforos desde la lista explícita del config
+        for (ConfiguracionSistema.ConfigSemaforo sem : config.getSemaforos().getLista()) {
+            semaforosPorInterseccion.put(sem.getInterseccion(),
+                new EstadoSemaforoInterseccion(sem.getInterseccion(), "ROJO", 0));
         }
 
         System.out.println("[SEMAFOROCTL] Semáforos inicializados.");

@@ -83,26 +83,38 @@ public class SensorCamara implements SensorTrafico {
         this.activo = false;
     }
 
-    // Main, lanza UN sensor de cámara por argumento.
-    public static void main(String[] args) throws Exception {
-        String rutaConfig = args.length > 0 ? args[0] : "config.json";
-        String sensorId   = args.length > 1 ? args[1] : null;
+    /**
+     * Punto de entrada para un proceso sensor individual.
+     * args[0] = ruta config.json o "--resources" para cargar desde classpath
+     * args[1] = sensor_id (obligatorio)
+     * Corre en el thread principal — este proceso ES el sensor.
+     */
+    public static void main(String[] args) {
+        if (args.length < 2) {
+            System.err.println("Uso: SensorCamara <config|--resources> <sensor_id>");
+            System.exit(1);
+        }
+        String configArg = args[0];
+        String sensorId  = args[1];
 
-        ConfiguracionSistema cfg = ConfiguracionSistema.cargar(rutaConfig);
+        ConfiguracionSistema cfg;
+        try {
+            cfg = "--resources".equals(configArg)
+                ? ConfiguracionSistema.cargarDesdeRecursos()
+                : ConfiguracionSistema.cargar(configArg);
+        } catch (Exception e) {
+            try { cfg = ConfiguracionSistema.cargarDesdeRecursos(); }
+            catch (Exception ex) { System.err.println("[CAMARA] Error cargando config: " + ex.getMessage()); System.exit(1); return; }
+        }
 
-        String brokerAddr = "tcp://" + "localhost" + ":" + cfg.getBroker().getPuerto_sub();
+        ConfigSensor cs = cfg.getSensores().getCamaras().stream()
+                .filter(s -> s.getSensor_id().equals(sensorId))
+                .findFirst()
+                .orElse(null);
+        if (cs == null) { System.err.println("[CAMARA] Sensor no encontrado: " + sensorId); System.exit(1); return; }
 
-        // Filtrar el sensor por ID si se especificó, o lanzar todos.
-        cfg.getSensores().getCamaras().stream()
-                .filter(s -> sensorId == null || s.getSensor_id().equals(sensorId))
-                .forEach(s -> {
-                    Thread t = new Thread(new SensorCamara(s, brokerAddr), s.getSensor_id());
-                    t.setDaemon(true);
-                    t.start();
-                    System.out.printf("[CAMARA] Hilo iniciado: %s%n", s.getSensor_id());
-                });
-
-        // Mantener el proceso vivo.
-        Thread.currentThread().join();
+        String brokerAddr = "tcp://localhost:" + cfg.getBroker().getPuerto_sub();
+        // Corre en el thread principal — visible como proceso separado en `ps`
+        new SensorCamara(cs, brokerAddr).run();
     }
 }

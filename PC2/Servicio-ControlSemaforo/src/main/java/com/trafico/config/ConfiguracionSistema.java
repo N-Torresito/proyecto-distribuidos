@@ -147,12 +147,13 @@ public class ConfiguracionSistema {
         public void setUmbral_congestion_densidad(int v) { this.umbral_congestion_densidad = v; }
     }
 
-    // Semaforos, tiempos de fase por estado de tráfico.
+    // Semaforos, tiempos de fase por estado de tráfico y lista explícita.
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Semaforos {
-        private int duracion_normal; // segundos en fase verde — tráfico normal.
-        private int duracion_congestion; // segundos en fase verde — congestión.
-        private int duracion_prioridad; // segundos en fase verde — ola verde / ambulancia.
+        private int duracion_normal;
+        private int duracion_congestion;
+        private int duracion_prioridad;
+        private List<ConfigSemaforo> lista;
 
         public int getDuracion_normal() { return duracion_normal; }
         public void setDuracion_normal(int v) { this.duracion_normal = v; }
@@ -160,6 +161,22 @@ public class ConfiguracionSistema {
         public void setDuracion_congestion(int v) { this.duracion_congestion = v; }
         public int getDuracion_prioridad() { return duracion_prioridad; }
         public void setDuracion_prioridad(int v) { this.duracion_prioridad = v; }
+        public List<ConfigSemaforo> getLista() { return lista; }
+        public void setLista(List<ConfigSemaforo> lista) { this.lista = lista; }
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class ConfigSemaforo {
+        private String semaforo_id;
+        private String interseccion;
+        private String direccion;
+
+        public String getSemaforo_id() { return semaforo_id; }
+        public void setSemaforo_id(String v) { this.semaforo_id = v; }
+        public String getInterseccion() { return interseccion; }
+        public void setInterseccion(String v) { this.interseccion = v; }
+        public String getDireccion() { return direccion; }
+        public void setDireccion(String v) { this.direccion = v; }
     }
 
     // Servicios, hosts y puertos de cada servicio del sistema.

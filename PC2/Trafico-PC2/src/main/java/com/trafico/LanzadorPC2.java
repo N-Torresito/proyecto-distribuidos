@@ -3,17 +3,20 @@ package com.trafico;
 import com.trafico.servicios.ServicioAnalitica;
 import com.trafico.servicios.ServicioControlSemaforos;
 import com.trafico.servicios.GestorBaseDatosReplica;
+import com.trafico.servicios.ServicioMonitoreoReplica;
+import com.trafico.servicios.ServidorVisualizador;
 import com.trafico.config.ConfiguracionSistema;
 
 /**
- * Lanzador Principal de PC2 (Servicio de Analítica, Control de Semáforos y BD Réplica).
+ * Lanzador Principal de PC2 (Servicio de Analítica, Control de Semáforos, BD Réplica y Monitoreo Réplica).
  *
  * Punto de entrada main que:
  * 1. Carga la configuración desde config.json
- * 2. Lanza 3 hilos independientes:
+ * 2. Lanza 4 hilos independientes:
  *    - Hilo 1: ServicioAnalitica (SUB + procesa + PUSH)
- *    - Hilo 2: ServicioControlSemaForos (gestiona semáforos)
+ *    - Hilo 2: ServicioControlSemaforos (gestiona semáforos)
  *    - Hilo 3: GestorBaseDatosReplica (PULL + DB)
+ *    - Hilo 4: ServicioMonitoreoReplica (REP puerto 7001, failover de PC3)
  * 3. Implementa hook de apagado limpio (Ctrl+C)
  */
 public class LanzadorPC2 {
@@ -43,22 +46,31 @@ public class LanzadorPC2 {
             ServicioAnalitica servicioAnalitica = new ServicioAnalitica();
             ServicioControlSemaforos servicioControlSemaForos = new ServicioControlSemaforos();
             GestorBaseDatosReplica gestorBaseDatos = new GestorBaseDatosReplica();
+            ServicioMonitoreoReplica servicioMonitoreoReplica = new ServicioMonitoreoReplica();
+            ServidorVisualizador servidorVisualizador = new ServidorVisualizador();
 
             // Lanzar hilos de servicios
             Thread hiloAnalitica = new Thread(servicioAnalitica, "Hilo-ServicioAnalitica");
             Thread hiloControlSemaForos = new Thread(servicioControlSemaForos, "Hilo-ServicioControlSemaForos");
             Thread hiloGestorBD = new Thread(gestorBaseDatos, "Hilo-GestorBaseDatosReplica");
+            Thread hiloMonitoreoReplica = new Thread(servicioMonitoreoReplica, "Hilo-ServicioMonitoreoReplica");
+            Thread hiloVisualizador = new Thread(servidorVisualizador, "Hilo-ServidorVisualizador");
 
             hiloAnalitica.setDaemon(false);
             hiloControlSemaForos.setDaemon(false);
             hiloGestorBD.setDaemon(false);
+            hiloMonitoreoReplica.setDaemon(false);
+            hiloVisualizador.setDaemon(false);
 
             System.out.println("[LANZADOR] Lanzando servicios...");
             hiloAnalitica.start();
             hiloControlSemaForos.start();
             hiloGestorBD.start();
+            hiloMonitoreoReplica.start();
+            hiloVisualizador.start();
 
-            System.out.println("[LANZADOR] Todos los servicios iniciados");
+            System.out.println("[LANZADOR] Todos los servicios iniciados (incluyendo MonitoreoReplica puerto " +
+                config.getServicios().getMonitoreo().getPuerto_replica() + ")");
             System.out.println("[LANZADOR] Presione Ctrl+C para detener...");
             System.out.println();
 
@@ -71,6 +83,8 @@ public class LanzadorPC2 {
                 servicioAnalitica.detener();
                 servicioControlSemaForos.detener();
                 gestorBaseDatos.detener();
+                servicioMonitoreoReplica.detener();
+                servidorVisualizador.detener();
 
                 // Esperar a que terminen los hilos
                 try {
@@ -78,6 +92,8 @@ public class LanzadorPC2 {
                     hiloAnalitica.join(5000);
                     hiloControlSemaForos.join(5000);
                     hiloGestorBD.join(5000);
+                    hiloMonitoreoReplica.join(5000);
+                    hiloVisualizador.join(5000);
                     System.out.println("[LANZADOR] ✓ Servicios detenidos correctamente");
                 } catch (InterruptedException e) {
                     System.err.println("[LANZADOR] Interrumpido durante el apagado: " + e.getMessage());
