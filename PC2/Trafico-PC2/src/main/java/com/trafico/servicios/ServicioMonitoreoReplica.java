@@ -241,8 +241,10 @@ public class ServicioMonitoreoReplica implements Runnable {
             // Enviar PUSH a analítica (mismo puerto 6002)
             try (ZContext ctx = new ZContext()) {
                 ZMQ.Socket pushSocket = ctx.createSocket(SocketType.PUSH);
+                pushSocket.setLinger(1000); // espera hasta 1s para que el mensaje salga antes de cerrar
                 String endpoint = "tcp://localhost:" + config.getServicios().getAnalitica().getPuerto_pull_monitoreo();
                 pushSocket.connect(endpoint);
+                Thread.sleep(100); // deja que ZMQ establezca la conexión TCP
 
                 Map<String, Object> comando = new HashMap<>();
                 comando.put("comando_id", comandoId);
