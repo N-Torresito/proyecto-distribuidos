@@ -149,7 +149,7 @@ public class ServidorVisualizador implements Runnable {
 
     private void procesarCamara(Map<String, Object> d) {
         String inter = str(d, "interseccion");
-        int    cola  = num(d, "longitud_cola");
+        int    cola  = num(d, "volumen");
         double vel   = dbl(d, "velocidad_promedio");
         colaCamera.put(inter, cola);
 
@@ -163,7 +163,7 @@ public class ServidorVisualizador implements Runnable {
 
     private void procesarEspira(Map<String, Object> d) {
         String inter    = str(d, "interseccion");
-        int    vehiculos= num(d, "vehiculos_por_minuto");
+        int    vehiculos= num(d, "vehiculos_contados");
         conteoEspira.put(inter, vehiculos);
 
         String estadoTrafico = vehiculos > 20 ? "CONGESTION" : "NORMAL";
@@ -177,15 +177,15 @@ public class ServidorVisualizador implements Runnable {
     private void procesarGPS(Map<String, Object> d) {
         String inter  = str(d, "interseccion");
         String nivel  = str(d, "nivel_congestion");
-        double dens   = dbl(d, "densidad_vehicular");
-        densidadGPS.put(inter, dens);
+        double vel    = dbl(d, "velocidad_promedio");
+        densidadGPS.put(inter, vel);
 
         String estadoTrafico = "ALTA".equals(nivel) ? "CONGESTION" : "NORMAL";
         if ("CONGESTION".equals(estadoTrafico)) {
             registrarAlerta(String.format("[%s] ALERTA GPS %s: densidad=%.1f nivel=%s",
                 Instant.now().toString().substring(11, 19), inter, dens, nivel));
         }
-        broadcast("sensor", buildSensorJson(inter, "GPS", estadoTrafico, 0, (int)dens, 0));
+        broadcast("sensor", buildSensorJson(inter, "GPS", estadoTrafico, 0, (int)vel, 0));
     }
 
     private String buildSensorJson(String inter, String tipo, String estado,

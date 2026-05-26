@@ -4,6 +4,7 @@ import com.trafico.servicios.ServicioAnalitica;
 import com.trafico.servicios.ServicioControlSemaforos;
 import com.trafico.servicios.GestorBaseDatosReplica;
 import com.trafico.servicios.ServicioMonitoreoReplica;
+import com.trafico.servicios.ServidorVisualizador;
 import com.trafico.config.ConfiguracionSistema;
 
 /**
@@ -46,23 +47,27 @@ public class LanzadorPC2 {
             ServicioControlSemaforos servicioControlSemaForos = new ServicioControlSemaforos();
             GestorBaseDatosReplica gestorBaseDatos = new GestorBaseDatosReplica();
             ServicioMonitoreoReplica servicioMonitoreoReplica = new ServicioMonitoreoReplica();
+            ServidorVisualizador servidorVisualizador = new ServidorVisualizador();
 
             // Lanzar hilos de servicios
             Thread hiloAnalitica = new Thread(servicioAnalitica, "Hilo-ServicioAnalitica");
             Thread hiloControlSemaForos = new Thread(servicioControlSemaForos, "Hilo-ServicioControlSemaForos");
             Thread hiloGestorBD = new Thread(gestorBaseDatos, "Hilo-GestorBaseDatosReplica");
             Thread hiloMonitoreoReplica = new Thread(servicioMonitoreoReplica, "Hilo-ServicioMonitoreoReplica");
+            Thread hiloVisualizador = new Thread(servidorVisualizador, "Hilo-ServidorVisualizador");
 
             hiloAnalitica.setDaemon(false);
             hiloControlSemaForos.setDaemon(false);
             hiloGestorBD.setDaemon(false);
             hiloMonitoreoReplica.setDaemon(false);
+            hiloVisualizador.setDaemon(false);
 
             System.out.println("[LANZADOR] Lanzando servicios...");
             hiloAnalitica.start();
             hiloControlSemaForos.start();
             hiloGestorBD.start();
             hiloMonitoreoReplica.start();
+            hiloVisualizador.start();
 
             System.out.println("[LANZADOR] Todos los servicios iniciados (incluyendo MonitoreoReplica puerto " +
                 config.getServicios().getMonitoreo().getPuerto_replica() + ")");
@@ -79,6 +84,7 @@ public class LanzadorPC2 {
                 servicioControlSemaForos.detener();
                 gestorBaseDatos.detener();
                 servicioMonitoreoReplica.detener();
+                servidorVisualizador.detener();
 
                 // Esperar a que terminen los hilos
                 try {
@@ -87,6 +93,7 @@ public class LanzadorPC2 {
                     hiloControlSemaForos.join(5000);
                     hiloGestorBD.join(5000);
                     hiloMonitoreoReplica.join(5000);
+                    hiloVisualizador.join(5000);
                     System.out.println("[LANZADOR] ✓ Servicios detenidos correctamente");
                 } catch (InterruptedException e) {
                     System.err.println("[LANZADOR] Interrumpido durante el apagado: " + e.getMessage());
