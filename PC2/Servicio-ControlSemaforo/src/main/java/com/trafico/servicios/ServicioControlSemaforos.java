@@ -6,24 +6,26 @@ import org.zeromq.SocketType;
 import org.zeromq.ZMQ;
 import org.zeromq.ZContext;
 
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.*;
 
 /**
- * Servicio de Control de Semáforos del PC2.
+ * Servicio de Control de Semáforos del PC2 (módulo independiente).
  *
- * Patrón REP: Responde a solicitudes de ServicioAnalitica mediante ZeroMQ en puerto 6001.
- * Mantiene un mapa de semáforos {intersección → estado (VERDE/ROJO)}.
- * Simula cambios de semáforo respetando duraciones de fase.
+ * REP (puerto 6001): recibe comandos de ServicioAnalitica.
+ * PUB → broker (puerto 5555): publica ESTADO_SEMAFORO al visualizador vía broker.
+ * PUB directo (puerto 5557): publica ESTADO_SEMAFORO directamente al visualizador.
  */
 public class ServicioControlSemaforos implements Runnable {
-    private final ConfiguracionSistema config;
-    private final Map<String, EstadoSemaforoInterseccion> semaforosPorInterseccion = Collections.synchronizedMap(new HashMap<>());
-    private final ObjectMapper objectMapper = new ObjectMapper();
-    private volatile boolean activo = true;
 
-    // ExecutorService para cambios de semáforo programados
+    private final ConfiguracionSistema config;
+    private final Map<String, EstadoSemaforoInterseccion> semaforosPorInterseccion =
+            Collections.synchronizedMap(new HashMap<>());
+    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final Queue<String> publishQueue = new ConcurrentLinkedQueue<>();
     private final ScheduledExecutorService scheduledExecutor = Executors.newScheduledThreadPool(4);
+    private volatile boolean activo = true;
 
     public ServicioControlSemaforos() {
         this.config = ConfiguracionSistema.getInstancia();
@@ -31,31 +33,45 @@ public class ServicioControlSemaforos implements Runnable {
 
     @Override
     public void run() {
-        System.out.println("[SEMAFOROCTL] Iniciando ServicioControlSemaForos...");
+        System.out.println("[SEMAFOROCTL] Iniciando ServicioControlSemaforos...");
 
-        // Inicializar semáforos desde la lista explícita del config
         for (ConfiguracionSistema.ConfigSemaforo sem : config.getSemaforos().getLista()) {
             semaforosPorInterseccion.put(sem.getInterseccion(),
-                new EstadoSemaforoInterseccion(sem.getInterseccion(), "ROJO", 0));
+                new EstadoSemaforoInterseccion(
+                    sem.getInterseccion(), sem.getSemaforo_id(), sem.getDireccion(), "ROJO", 0));
         }
-
-        System.out.println("[SEMAFOROCTL] Semáforos inicializados.");
+        System.out.printf("[SEMAFOROCTL] %d semáforos inicializados en ROJO.%n",
+            semaforosPorInterseccion.size());
 
         try (ZContext context = new ZContext()) {
-            // Socket REP para responder a solicitudes de ServicioAnalitica
+
+            // PUB → broker
+            ZMQ.Socket socketPub = context.createSocket(SocketType.PUB);
+            socketPub.connect("tcp://" + config.getBroker().getHost_pc2() + ":" + config.getBroker().getPuerto_sub());
+
+            // PUB directo → visualizador (sin broker)
+            ZMQ.Socket socketPubLocal = context.createSocket(SocketType.PUB);
+            socketPubLocal.bind("tcp://*:5557");
+            Thread.sleep(300);
+
+            // REP → analytics
             ZMQ.Socket socketRep = context.createSocket(SocketType.REP);
             String uriRep = "tcp://*:" + config.getServicios().getAnalitica().getPuerto_push_semaforoctl();
             socketRep.bind(uriRep);
-            System.out.println("[SEMAFOROCTL] Socket REP enlazado en: " + uriRep);
+            System.out.println("[SEMAFOROCTL] REP enlazado en: " + uriRep);
+            System.out.println("[SEMAFOROCTL] PUB directo enlazado en tcp://*:5557");
 
             while (activo) {
-                // Recibir solicitud sin bloquear
-                String solicitud = socketRep.recvStr(ZMQ.DONTWAIT);
+                // Drenar cola de publicaciones
+                String pub;
+                while ((pub = publishQueue.poll()) != null) {
+                    socketPub.send(pub, 0);
+                    socketPubLocal.send(pub, 0);
+                }
 
+                String solicitud = socketRep.recvStr(ZMQ.DONTWAIT);
                 if (solicitud != null) {
                     procesarComando(solicitud);
-
-                    // Enviar respuesta
                     String respuesta = objectMapper.writeValueAsString(Map.of(
                         "status", "OK",
                         "mensaje", "Semáforo procesado",
@@ -63,7 +79,7 @@ public class ServicioControlSemaforos implements Runnable {
                     ));
                     socketRep.send(respuesta.getBytes(), 0);
                 } else {
-                    Thread.sleep(100); // Pequeña pausa para no consumir CPU
+                    Thread.sleep(10);
                 }
             }
 
@@ -76,33 +92,26 @@ public class ServicioControlSemaforos implements Runnable {
         }
     }
 
-    /**
-     * Procesa un comando para cambiar el estado de un semáforo.
-     */
     private void procesarComando(String comando) {
         try {
             @SuppressWarnings("unchecked")
             Map<String, Object> datosComando = objectMapper.readValue(comando, Map.class);
 
             String interseccion = (String) datosComando.get("interseccion");
-            String estado = (String) datosComando.get("estado");
             int duracion = ((Number) datosComando.get("duracion")).intValue();
 
-            EstadoSemaforoInterseccion semaforoActual = semaforosPorInterseccion.get(interseccion);
-            if (semaforoActual == null) {
+            EstadoSemaforoInterseccion sem = semaforosPorInterseccion.get(interseccion);
+            if (sem == null) {
                 System.err.println("[SEMAFOROCTL] Intersección desconocida: " + interseccion);
                 return;
             }
 
-            // Si ya estaba en VERDE, mantener estado pero actualizar duración
-            // Si estaba en ROJO, cambiar a VERDE
-            if (semaforoActual.estadoActual.equals("ROJO")) {
-                cambiarSemaforoAVerde(interseccion, duracion);
+            if ("ROJO".equals(sem.estadoActual)) {
+                cambiarSemaforoAVerde(sem, duracion);
             } else {
-                // Ya está en VERDE, solo actualizar la duración remanente
-                semaforoActual.duracionRemanente = duracion;
-                System.out.println(String.format("[SEMAFOROCTL] %s | VERDE (actualizado) | duracion=%ds",
-                    interseccion, duracion));
+                sem.duracionRemanente = duracion;
+                System.out.printf("[SEMAFOROCTL] %s | VERDE (actualizado) | %ds%n",
+                    interseccion, duracion);
             }
 
         } catch (Exception e) {
@@ -110,67 +119,68 @@ public class ServicioControlSemaforos implements Runnable {
         }
     }
 
-    /**
-     * Cambia el semáforo a VERDE y programa su regreso a ROJO.
-     */
-    private void cambiarSemaforoAVerde(String interseccion, int duracion) {
-        EstadoSemaforoInterseccion semaforoActual = semaforosPorInterseccion.get(interseccion);
-        semaforoActual.estadoActual = "VERDE";
-        semaforoActual.duracionRemanente = duracion;
-
-        System.out.println(String.format("[SEMAFOROCTL] %s | VERDE | duracion=%ds",
-            interseccion, duracion));
-
-        // Programar cambio a ROJO después de la duración especificada
-        scheduledExecutor.schedule(() -> cambiarSemaforoARojo(interseccion),
-            duracion, TimeUnit.SECONDS);
+    private void cambiarSemaforoAVerde(EstadoSemaforoInterseccion sem, int duracion) {
+        sem.estadoActual = "VERDE";
+        sem.duracionRemanente = duracion;
+        System.out.printf("[SEMAFOROCTL] %s | %s | VERDE | %ds%n",
+            sem.interseccion, sem.semaforoId, duracion);
+        publicarEstado(sem);
+        scheduledExecutor.schedule(() -> cambiarSemaforoARojo(sem), duracion, TimeUnit.SECONDS);
     }
 
-    /**
-     * Cambia el semáforo a ROJO.
-     */
-    private void cambiarSemaforoARojo(String interseccion) {
-        EstadoSemaforoInterseccion semaforoActual = semaforosPorInterseccion.get(interseccion);
-        semaforoActual.estadoActual = "ROJO";
-        semaforoActual.duracionRemanente = 0;
-
-        System.out.println(String.format("[SEMAFOROCTL] %s | ROJO | esperando comando",
-            interseccion));
+    private void cambiarSemaforoARojo(EstadoSemaforoInterseccion sem) {
+        sem.estadoActual = "ROJO";
+        sem.duracionRemanente = 0;
+        System.out.printf("[SEMAFOROCTL] %s | %s | ROJO%n", sem.interseccion, sem.semaforoId);
+        publicarEstado(sem);
     }
 
-    /**
-     * Obtiene el estado actual de un semáforo.
-     */
+    private void publicarEstado(EstadoSemaforoInterseccion sem) {
+        try {
+            Map<String, Object> ev = new LinkedHashMap<>();
+            ev.put("semaforo_id",        sem.semaforoId);
+            ev.put("interseccion",        sem.interseccion);
+            ev.put("estado",              sem.estadoActual);
+            ev.put("direccion",           sem.direccion);
+            ev.put("direccion_bloqueada", sem.direccionOpuesta());
+            ev.put("duracion",            sem.duracionRemanente);
+            ev.put("timestamp",           Instant.now().toString());
+            publishQueue.add("ESTADO_SEMAFORO " + objectMapper.writeValueAsString(ev));
+        } catch (Exception e) {
+            System.err.println("[SEMAFOROCTL] Error publicando: " + e.getMessage());
+        }
+    }
+
     public String obtenerEstadoSemaforoInterseccion(String interseccion) {
-        EstadoSemaforoInterseccion estado = semaforosPorInterseccion.get(interseccion);
-        return estado != null ? estado.estadoActual : "DESCONOCIDO";
+        EstadoSemaforoInterseccion s = semaforosPorInterseccion.get(interseccion);
+        return s != null ? s.estadoActual : "DESCONOCIDO";
     }
 
-    /**
-     * Obtiene la duración remanente de la fase actual.
-     */
     public int obtenerDuracionRemanente(String interseccion) {
-        EstadoSemaforoInterseccion estado = semaforosPorInterseccion.get(interseccion);
-        return estado != null ? estado.duracionRemanente : 0;
+        EstadoSemaforoInterseccion s = semaforosPorInterseccion.get(interseccion);
+        return s != null ? s.duracionRemanente : 0;
     }
 
-    public void detener() {
-        activo = false;
-    }
+    public void detener() { activo = false; }
 
-    /**
-     * Clase auxiliar para rastrear el estado de un semáforo.
-     */
     private static class EstadoSemaforoInterseccion {
         String interseccion;
-        String estadoActual; // "VERDE" o "ROJO"
-        int duracionRemanente;
+        String semaforoId;
+        String direccion;
+        String estadoActual;
+        int    duracionRemanente;
 
-        EstadoSemaforoInterseccion(String interseccion, String estado, int duracion) {
-            this.interseccion = interseccion;
-            this.estadoActual = estado;
+        EstadoSemaforoInterseccion(String interseccion, String semaforoId,
+                                   String direccion, String estado, int duracion) {
+            this.interseccion      = interseccion;
+            this.semaforoId        = semaforoId;
+            this.direccion         = direccion;
+            this.estadoActual      = estado;
             this.duracionRemanente = duracion;
+        }
+
+        String direccionOpuesta() {
+            return "NORTE-SUR".equals(direccion) ? "ESTE-OESTE" : "NORTE-SUR";
         }
     }
 }
-

@@ -2,7 +2,7 @@
   "ciudad": {
     "filas": ["A","B","C","D","E"],
     "columnas": [1,2,3,4,5],
-    "total_intersecciones": 25
+    "total_intersecciones": 3
   },
   "broker": {
     "puerto_sub": 5555,
@@ -14,21 +14,9 @@
     "duracion_congestion": 25,
     "duracion_prioridad": 40,
     "lista": [
-      {"semaforo_id":"SEM-A1","interseccion":"INT-A1","direccion":"NORTE-SUR"},
-      {"semaforo_id":"SEM-A2","interseccion":"INT-A2","direccion":"ESTE-OESTE"},
-      {"semaforo_id":"SEM-A3","interseccion":"INT-A3","direccion":"NORTE-SUR"},
-      {"semaforo_id":"SEM-B1","interseccion":"INT-B1","direccion":"NORTE-SUR"},
-      {"semaforo_id":"SEM-B3","interseccion":"INT-B3","direccion":"NORTE-SUR"},
-      {"semaforo_id":"SEM-B4","interseccion":"INT-B4","direccion":"ESTE-OESTE"},
-      {"semaforo_id":"SEM-C1","interseccion":"INT-C1","direccion":"NORTE-SUR"},
-      {"semaforo_id":"SEM-C4","interseccion":"INT-C4","direccion":"ESTE-OESTE"},
-      {"semaforo_id":"SEM-C5","interseccion":"INT-C5","direccion":"NORTE-SUR"},
-      {"semaforo_id":"SEM-D2","interseccion":"INT-D2","direccion":"ESTE-OESTE"},
-      {"semaforo_id":"SEM-D3","interseccion":"INT-D3","direccion":"NORTE-SUR"},
-      {"semaforo_id":"SEM-D5","interseccion":"INT-D5","direccion":"NORTE-SUR"},
-      {"semaforo_id":"SEM-E2","interseccion":"INT-E2","direccion":"ESTE-OESTE"},
-      {"semaforo_id":"SEM-E4","interseccion":"INT-E4","direccion":"ESTE-OESTE"},
-      {"semaforo_id":"SEM-E5","interseccion":"INT-E5","direccion":"NORTE-SUR"}
+      {"semaforo_id":"SEM-C2","interseccion":"INT-C2","direccion":"ESTE-OESTE"},
+      {"semaforo_id":"SEM-C3","interseccion":"INT-C3","direccion":"NORTE-SUR"},
+      {"semaforo_id":"SEM-C4","interseccion":"INT-C4","direccion":"NORTE-SUR"}
     ]
   },
   "servicios": {
@@ -49,25 +37,13 @@
   },
   "sensores": {
     "camaras": [
-      {"sensor_id":"CAM-A1","interseccion":"INT-A1","intervalo_ms":5000},
-      {"sensor_id":"CAM-B3","interseccion":"INT-B3","intervalo_ms":5000},
-      {"sensor_id":"CAM-C5","interseccion":"INT-C5","intervalo_ms":5000},
-      {"sensor_id":"CAM-D2","interseccion":"INT-D2","intervalo_ms":5000},
-      {"sensor_id":"CAM-E4","interseccion":"INT-E4","intervalo_ms":5000}
+      {"sensor_id":"CAM-C2","interseccion":"INT-C2","intervalo_ms":5000}
     ],
     "espiras": [
-      {"sensor_id":"ESP-A2","interseccion":"INT-A2","intervalo_ms":30000},
-      {"sensor_id":"ESP-B4","interseccion":"INT-B4","intervalo_ms":30000},
-      {"sensor_id":"ESP-C1","interseccion":"INT-C1","intervalo_ms":30000},
-      {"sensor_id":"ESP-D3","interseccion":"INT-D3","intervalo_ms":30000},
-      {"sensor_id":"ESP-E5","interseccion":"INT-E5","intervalo_ms":30000}
+      {"sensor_id":"ESP-C3","interseccion":"INT-C3","intervalo_ms":8000}
     ],
     "gps": [
-      {"sensor_id":"GPS-A3","interseccion":"INT-A3","intervalo_ms":8000},
-      {"sensor_id":"GPS-B1","interseccion":"INT-B1","intervalo_ms":8000},
-      {"sensor_id":"GPS-C4","interseccion":"INT-C4","intervalo_ms":8000},
-      {"sensor_id":"GPS-D5","interseccion":"INT-D5","intervalo_ms":8000},
-      {"sensor_id":"GPS-E2","interseccion":"INT-E2","intervalo_ms":8000}
+      {"sensor_id":"GPS-C4","interseccion":"INT-C4","intervalo_ms":8000}
     ]
   },
   "trafico": {

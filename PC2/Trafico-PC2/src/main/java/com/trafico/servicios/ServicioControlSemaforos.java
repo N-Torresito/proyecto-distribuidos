@@ -49,11 +49,13 @@ public class ServicioControlSemaforos implements Runnable {
 
         try (ZContext ctx = new ZContext()) {
 
-            // PUB → broker: publica cambios de estado al visualizador.
-            // En single-machine host_pc2 == esta máquina == donde corre el broker.
-            // Para multi-PC, cambiar host_pc2 por la IP real del PC1 (broker).
+            // PUB → broker: publica cambios de estado (ruta principal).
             ZMQ.Socket socketPub = ctx.createSocket(SocketType.PUB);
             socketPub.connect("tcp://" + config.getBroker().getHost_pc2() + ":" + config.getBroker().getPuerto_sub());
+
+            // PUB directo → visualizador: ruta de respaldo sin broker.
+            ZMQ.Socket socketPubLocal = ctx.createSocket(SocketType.PUB);
+            socketPubLocal.bind("tcp://*:5557");
             Thread.sleep(300); // ZMQ connection warm-up
 
             // REP → analytics: recibe comandos de cambio de fase
@@ -61,12 +63,14 @@ public class ServicioControlSemaforos implements Runnable {
             String uriBind = "tcp://*:" + config.getServicios().getAnalitica().getPuerto_push_semaforoctl();
             socketRep.bind(uriBind);
             System.out.println("[SEMAFOROCTL] REP enlazado en " + uriBind);
+            System.out.println("[SEMAFOROCTL] PUB directo enlazado en tcp://*:5557");
 
             while (activo) {
                 // Drenar cola de publicaciones (llenada desde hilos del scheduler)
                 String pub;
                 while ((pub = publishQueue.poll()) != null) {
                     socketPub.send(pub, 0);
+                    socketPubLocal.send(pub, 0);
                 }
 
                 // Recibir comandos de analytics

@@ -435,7 +435,9 @@ public class ControladorConsultas {
         String endpoint = "tcp://" + analitricaConfig.getHost() + ":" + analitricaConfig.getPuerto_pull_monitoreo();
 
         ZMQ.Socket socket = zContext.createSocket(ZMQ.PUSH);
+        socket.setLinger(1000); // espera hasta 1s para que el mensaje salga antes de cerrar
         socket.connect(endpoint);
+        Thread.sleep(100); // deja que ZMQ establezca la conexión TCP
 
         Map<String, Object> comando = new HashMap<>();
         comando.put("comando_id", comandoId);

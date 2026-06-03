@@ -82,12 +82,16 @@ public class ServidorVisualizador implements Runnable {
     // ── ZMQ SUB loop ──────────────────────────────────────────────────────────
 
     private void escucharZMQ() {
-        String uri = "tcp://" + brokerHost + ":" + brokerPubPort;
-        System.out.println("[VISUALIZADOR] SUB conectando a " + uri);
+        String uriBroker = "tcp://" + brokerHost + ":" + brokerPubPort;
+        String uriDirecto = "tcp://localhost:5557";
+        System.out.println("[VISUALIZADOR] SUB conectando a broker: " + uriBroker);
+        System.out.println("[VISUALIZADOR] SUB conectando directo: " + uriDirecto);
         try (ZContext ctx = new ZContext()) {
             ZMQ.Socket sub = ctx.createSocket(SocketType.SUB);
-            sub.connect(uri);
+            sub.connect(uriBroker);
+            sub.connect(uriDirecto); // directo desde ServicioControlSemaforos
             sub.subscribe(""); // todos los tópicos
+            Thread.sleep(300); // ZMQ warm-up
 
             while (activo) {
                 String msg = sub.recvStr(ZMQ.DONTWAIT);
@@ -182,8 +186,8 @@ public class ServidorVisualizador implements Runnable {
 
         String estadoTrafico = "ALTA".equals(nivel) ? "CONGESTION" : "NORMAL";
         if ("CONGESTION".equals(estadoTrafico)) {
-            registrarAlerta(String.format("[%s] ALERTA GPS %s: densidad=%.1f nivel=%s",
-                Instant.now().toString().substring(11, 19), inter, dens, nivel));
+            registrarAlerta(String.format("[%s] ALERTA GPS %s: vel=%.1f km/h nivel=%s",
+                Instant.now().toString().substring(11, 19), inter, vel, nivel));
         }
         broadcast("sensor", buildSensorJson(inter, "GPS", estadoTrafico, 0, (int)vel, 0));
     }
